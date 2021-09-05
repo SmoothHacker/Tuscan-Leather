@@ -94,7 +94,7 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
             break;
         addr -= 0x100000;
     }
-    printf("initrd address: %lx\n", addr);
+
     boot->hdr.ramdisk_image = addr;
     boot->hdr.ramdisk_size = st.st_size;
     void *initrd = (void *)(((uint8_t *)guest->mem) + addr);
@@ -191,23 +191,71 @@ int initVMRegs(struct kernelGuest *guest) {
 };
 
 int createCPUID(struct kernelGuest *guest) {
-    struct {
-        uint32_t nent;
-        uint32_t padding;
-        struct kvm_cpuid_entry2 entries[100];
-    } kvm_cpuid;
-    kvm_cpuid.nent = sizeof(kvm_cpuid.entries) / sizeof(kvm_cpuid.entries[0]);
-    ioctl(guest->kvm_fd, KVM_GET_SUPPORTED_CPUID, &kvm_cpuid);
+   struct kvm_cpuid2 *cpuid;
+    cpuid = calloc(1, sizeof(*cpuid) + MAX_CPUID_ENTRIES * sizeof(*cpuid->entries));
+    cpuid->nent = MAX_CPUID_ENTRIES;
+   if(ioctl(guest->kvm_fd, KVM_GET_SUPPORTED_CPUID, cpuid) < 0)
+       err(1, "[!] Failed to get supported CPUID");
 
-    for (unsigned int i = 0; i < kvm_cpuid.nent; i++) {
-        struct kvm_cpuid_entry2 *entry = &kvm_cpuid.entries[i];
-        if (entry->function == KVM_CPUID_SIGNATURE) {
-            entry->eax = KVM_CPUID_FEATURES;
-            entry->ebx = 0x4b4d564b; // KVMK
-            entry->ecx = 0x564b4d56; // VMKV
-            entry->edx = 0x4d;       // M
-        }
-    }
-    ioctl(guest->vcpu_fd, KVM_SET_CPUID2, &kvm_cpuid);
-    return 0;
+    filterCPUID(cpuid);
+
+   if(ioctl(guest->vcpu_fd, KVM_SET_CPUID2, cpuid) < 0)
+       err(1, "[!] Failed to set CPUID2");
+
+   free(cpuid);
+   return 0;
 };
+
+int filterCPUID(struct kvm_cpuid2 *cpuid) {
+    // Remove CPUID functions that are not supported by LateRegistration
+    for (unsigned int i = 0; i < cpuid->nent; i++) {
+        struct kvm_cpuid_entry2 *entry = &cpuid->entries[i];
+
+        switch (entry->function) {
+            case KVM_CPUID_FEATURES:
+                // Vendor name
+                entry->eax = KVM_CPUID_FEATURES;
+                entry->ebx = 0x4b4d564b;
+                entry->ecx = 0x564b4d56;
+                entry->edx = 0x4d;
+                break;
+            case 1:
+                // Set X86_FEATURE_HYPERVISOR
+                if (entry->index == 0)
+                    entry->ecx |= (1 << 31);
+                break;
+            case 6:
+                // Clear X86_FEATURE_EPB
+                entry->ecx = entry->ecx & ~(1 << 3);
+                break;
+            case 10: { // Architectural Performance Monitoring
+                union cpuid10_eax {
+                    struct {
+                        unsigned int version_id		:8;
+                        unsigned int num_counters	:8;
+                        unsigned int bit_width		:8;
+                        unsigned int mask_length	:8;
+                    } split;
+                    unsigned int full;
+                } eax;
+
+                /*
+                 * If the host has perf system running,
+                 * but no architectural events available
+                 * through kvm pmu -- disable perf support,
+                 * thus guest won't even try to access msr
+                 * registers.
+                 */
+                if (entry->eax) {
+                    eax.full = entry->eax;
+                    if (eax.split.version_id != 2 || !eax.split.num_counters)
+                        entry->eax = 0;
+                }
+                break;
+            }
+            default:
+                // Keep the CPUID function as -is
+                break;
+        };
+    }
+}
