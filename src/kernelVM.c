@@ -42,8 +42,8 @@ int createKernelVM(struct kernelGuest *guest) {
     return 0;
 };
 
-int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath) {
-    size_t datasz;
+int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const char* initrdImagePath) {
+    size_t dataSize;
     void *data;
     int fd = open(kernelImagePath, O_RDONLY);
     if (fd < 0) {
@@ -52,29 +52,53 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath) {
     struct stat st;
     fstat(fd, &st);
     data = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    datasz = st.st_size;
+    dataSize = st.st_size;
     close(fd);
 
-    struct boot_params *boot =
-            (struct boot_params *)(((uint8_t *)guest->mem) + 0x10000);
+    struct boot_params *boot = (struct boot_params *)(((uint8_t *)guest->mem) + 0x10000);
     void *cmdline = (void *)(((uint8_t *)guest->mem) + 0x20000);
-    void *kernel = (void *)(((uint8_t *)guest->mem) + 0x100000);
+    void *kernel = (void *)(((uint8_t *)guest->mem) + 0x100000); // Loads protected mode kernel
 
     memset(boot, 0, sizeof(struct boot_params));
     memmove(boot, data, sizeof(struct boot_params));
     size_t setup_sectors = boot->hdr.setup_sects;
-    size_t setupsz = (setup_sectors + 1) * 512;
+    size_t setupSize = (setup_sectors + 1) * 512;
     boot->hdr.vid_mode = 0xFFFF; // VGA
     boot->hdr.type_of_loader = 0xFF;
-    boot->hdr.ramdisk_image = 0x0;
-    boot->hdr.ramdisk_size = 0x0;
     boot->hdr.loadflags |= CAN_USE_HEAP | 0x01 | KEEP_SEGMENTS;
     boot->hdr.heap_end_ptr = 0xFE00;
     boot->hdr.ext_loader_ver = 0x0;
     boot->hdr.cmd_line_ptr = 0x20000;
     memset(cmdline, 0, boot->hdr.cmdline_size);
     memcpy(cmdline, "console=ttyS0", 14);
-    memmove(kernel, (char *)data + setupsz, datasz - setupsz);
+    memmove(kernel, (char *)data + setupSize, dataSize - setupSize);
+
+    // Setup initrd
+    size_t initrdSize;
+    int initrdFD = open(initrdImagePath, O_RDONLY);
+    if (fd < 0) {
+        return 1;
+    }
+    fstat(initrdFD, &st);
+    void *initrdData = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, initrdFD, 0);
+    initrdSize = st.st_size;
+    close(initrdFD);
+
+    unsigned long addr = boot->hdr.initrd_addr_max & ~0xfffff;
+    for (;;) {
+        if (addr < 0x100000UL) {
+            printf("Not enough memory for initrd");
+            return 0;
+        }
+        else if (addr < ((1 << 30) - st.st_size))
+            break;
+        addr -= 0x100000;
+    }
+    printf("initrd address: %lx\n", addr);
+    boot->hdr.ramdisk_image = addr;
+    boot->hdr.ramdisk_size = st.st_size;
+    void *initrd = (void *)(((uint8_t *)guest->mem) + addr);
+    memmove(initrd, initrdData, boot->hdr.ramdisk_size);
     return 0;
 };
 
@@ -83,6 +107,7 @@ int cleanupKernelVM(struct kernelGuest *guest) {
     close(guest->vmfd);
     close(guest->kvm_fd);
     munmap(guest->mem, 1 << 30);
+    return 0;
 };
 
 int runKernelVM(struct kernelGuest *guest) {

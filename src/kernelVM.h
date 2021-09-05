@@ -22,7 +22,7 @@ struct kernelGuest {
 };
 
 int createKernelVM(struct kernelGuest *guest);
-int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath);
+int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const char* initrdImagePath);
 int cleanupKernelVM(struct kernelGuest *guest);
 int runKernelVM(struct kernelGuest *guest);
 int initVMRegs(struct kernelGuest *guest);
