@@ -133,8 +133,6 @@ int runKernelVM(struct kernelGuest *guest) {
                 printf("\n\t[!] Encountered HLT instruction\n\n");
                 break;
             case KVM_EXIT_SHUTDOWN:
-                dumpRegisters(guest);
-                run->
                 printf("[!] Shutdown Received\n");
                 return 0;
             default:
