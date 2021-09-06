@@ -8,6 +8,11 @@
 #include "kernelVM.h"
 
 int main(int argc, char **argv) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: ./LateRegistration <bzImage> <initrd>\n");
+        return -1;
+    }
+
     printf("LateRegistration - Linux Kernel Hypervisor\n");
     struct kernelGuest guest;
 

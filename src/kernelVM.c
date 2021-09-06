@@ -18,7 +18,7 @@ int createKernelVM(struct kernelGuest *guest) {
     if(ioctl(guest->vmfd, KVM_CREATE_PIT2, &pit) < 0)
         err(1, "[!] Failed to create i8254 interval timer");
 
-    guest->mem = mmap(NULL, 1 << 30, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    guest->mem = mmap(NULL, MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if(!guest->mem)
         err(1, "[!] Failed to mmap VM memory");
 
@@ -26,7 +26,7 @@ int createKernelVM(struct kernelGuest *guest) {
             .slot = 0,
             .flags = 0,
             .guest_phys_addr = 0,
-            .memory_size = 1 << 30,
+            .memory_size = MEM_SIZE,
             .userspace_addr = (uint64_t) guest->mem
     };
 
@@ -43,64 +43,62 @@ int createKernelVM(struct kernelGuest *guest) {
 };
 
 int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const char* initrdImagePath) {
-    size_t dataSize;
-    void *data;
-    int fd = open(kernelImagePath, O_RDONLY);
-    if (fd < 0) {
-        return 1;
-    }
-    struct stat st;
-    fstat(fd, &st);
-    data = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    dataSize = st.st_size;
-    close(fd);
-
-    struct boot_params *boot = (struct boot_params *)(((uint8_t *)guest->mem) + 0x10000);
-    void *cmdline = (void *)(((uint8_t *)guest->mem) + 0x20000);
-    void *kernel = (void *)(((uint8_t *)guest->mem) + 0x100000); // Loads protected mode kernel
-
-    memset(boot, 0, sizeof(struct boot_params));
-    memmove(boot, data, sizeof(struct boot_params));
-    size_t setup_sectors = boot->hdr.setup_sects;
-    size_t setupSize = (setup_sectors + 1) * 512;
-    boot->hdr.vid_mode = 0xFFFF; // VGA
-    boot->hdr.type_of_loader = 0xFF;
-    boot->hdr.loadflags |= CAN_USE_HEAP | 0x01 | KEEP_SEGMENTS;
-    boot->hdr.heap_end_ptr = 0xFE00;
-    boot->hdr.ext_loader_ver = 0x0;
-    boot->hdr.cmd_line_ptr = 0x20000;
-    memset(cmdline, 0, boot->hdr.cmdline_size);
-    memcpy(cmdline, "console=ttyS0", 14);
-    memmove(kernel, (char *)data + setupSize, dataSize - setupSize);
-
-    // Setup initrd
-    size_t initrdSize;
+    int kernelFD = open(kernelImagePath, O_RDONLY);
     int initrdFD = open(initrdImagePath, O_RDONLY);
-    if (fd < 0) {
-        return 1;
+
+    const char *kernelCmdline = "console=ttyS0";
+
+    if (!kernelFD || !initrdFD) {
+        err(1, "[!] Cannot open kernel image and/or initrd");
     }
+
+    struct stat st;
+    fstat(kernelFD, &st);
+    size_t kernelFileSize = st.st_size;
+    void *kernelFile = mmap(0, kernelFileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, kernelFD, 0);
+    close(kernelFD);
+
     fstat(initrdFD, &st);
-    void *initrdData = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, initrdFD, 0);
-    initrdSize = st.st_size;
+    size_t initrdFileSize = st.st_size;
+    void *initrdFile = mmap(0, initrdFileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, initrdFD, 0);
     close(initrdFD);
 
-    unsigned long addr = boot->hdr.initrd_addr_max & ~0xfffff;
-    for (;;) {
-        if (addr < 0x100000UL) {
-            printf("Not enough memory for initrd");
-            return 0;
-        }
-        else if (addr < ((1 << 30) - st.st_size))
-            break;
-        addr -= 0x100000;
-    }
+    struct boot_params *boot = (struct boot_params *)(((uint8_t *)guest->mem) + BOOT_PARAM_ADDR);
+    void *cmdline = (void *)(((uint8_t *)guest->mem) + CMDLINE_ADDR);
+    void *kernel = (void *)(((uint8_t *)guest->mem) + KERNEL_ADDR);
 
-    boot->hdr.ramdisk_image = addr;
-    boot->hdr.ramdisk_size = st.st_size;
-    void *initrd = (void *)(((uint8_t *)guest->mem) + addr);
-    memmove(initrd, initrdData, boot->hdr.ramdisk_size);
+    memset(boot, 0, sizeof(struct boot_params));
+    memmove(boot, kernelFile, sizeof(struct boot_params));
+    size_t offset = (boot->hdr.setup_sects + 1) * 512;
+    boot->hdr.vid_mode = 0xfff; // VGA
+    boot->hdr.type_of_loader = 0xff;
+    boot->hdr.ramdisk_image = 0x0;
+    boot->hdr.ramdisk_size = 0x0;
+    boot->hdr.loadflags |= CAN_USE_HEAP | LOADED_HIGH | KEEP_SEGMENTS;// | 0x01 | KEEP_SEGMENTS;
+    boot->hdr.heap_end_ptr = 0xFE00;
+    boot->hdr.cmd_line_ptr = CMDLINE_ADDR;
+    boot->hdr.cmdline_size = 14 + 1;
+    memset(cmdline, 0, boot->hdr.cmdline_size);
+    memcpy(cmdline, "console=ttyS0", 14);
+    memmove(kernel, (char *)kernelFile + offset, kernelFileSize - offset);
+
+    // Setup E820Entries
+    addE820Entry(boot, RealModeIvtBegin, EBDAStart - RealModeIvtBegin, E820Ram);
+    addE820Entry(boot, EBDAStart, VGARAMBegin - EBDAStart, E820Reserved);
+    addE820Entry(boot, MBBIOSBegin, MBBIOSEnd - MBBIOSBegin, E820Reserved);
+    addE820Entry(boot, KERNEL_ADDR, (MEM_SIZE) - KERNEL_ADDR, E820Ram);
     return 0;
 };
+
+int addE820Entry(struct boot_params* boot, uint64_t addr, uint64_t size, uint32_t type) {
+    size_t i = boot->e820_entries;
+    boot->e820_table[i] = (struct boot_e820_entry) {
+        .addr = addr,
+        .size = size,
+        .type = type,
+    };
+    boot->e820_entries = i + 1;
+}
 
 int cleanupKernelVM(struct kernelGuest *guest) {
     close(guest->vcpu_fd);
@@ -131,8 +129,13 @@ int runKernelVM(struct kernelGuest *guest) {
                     *value = 0x20;
                 }
                 break;
+            case KVM_EXIT_HLT:
+                printf("\n\t[!] Encountered HLT instruction\n\n");
+                break;
             case KVM_EXIT_SHUTDOWN:
-                printf("shutdown\n");
+                dumpRegisters(guest);
+                run->
+                printf("[!] Shutdown Received\n");
                 return 0;
             default:
                 printf("reason: %d\n", run->exit_reason);
@@ -173,7 +176,7 @@ int initVMRegs(struct kernelGuest *guest) {
 
     sregs.cs.db = 1;
     sregs.ss.db = 1;
-    sregs.cr0 |= 1; // enable protected mode - required for linux to boot
+    sregs.cr0 |= 1; // enable protected mode
 
     if (ioctl(guest->vcpu_fd, KVM_SET_SREGS, &sregs) < 0)
         err(1, "[!] Failed to set special registers");
@@ -181,9 +184,11 @@ int initVMRegs(struct kernelGuest *guest) {
     if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
         err(1, "[!] Failed to get registers");
 
-    regs.rflags = 2;
-    regs.rip = 0x100000;
-    regs.rsi = 0x10000;
+    regs = (struct kvm_regs) {
+      .rflags = 2,
+      .rip = KERNEL_ADDR,
+      .rsi = BOOT_PARAM_ADDR,
+    };
 
     if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &regs) < 0)
         err(1, "[!] Failed to set registers");
@@ -191,18 +196,21 @@ int initVMRegs(struct kernelGuest *guest) {
 };
 
 int createCPUID(struct kernelGuest *guest) {
-   struct kvm_cpuid2 *cpuid;
-    cpuid = calloc(1, sizeof(*cpuid) + MAX_CPUID_ENTRIES * sizeof(*cpuid->entries));
-    cpuid->nent = MAX_CPUID_ENTRIES;
-   if(ioctl(guest->kvm_fd, KVM_GET_SUPPORTED_CPUID, cpuid) < 0)
-       err(1, "[!] Failed to get supported CPUID");
+    struct kvm_cpuid2 *kvm_cpuid;
 
-    filterCPUID(cpuid);
+    kvm_cpuid = calloc(1, sizeof(*kvm_cpuid) +
+                          100 * sizeof(*kvm_cpuid->entries));
 
-   if(ioctl(guest->vcpu_fd, KVM_SET_CPUID2, cpuid) < 0)
-       err(1, "[!] Failed to set CPUID2");
+    kvm_cpuid->nent = 100;
+    if (ioctl(guest->kvm_fd, KVM_GET_SUPPORTED_CPUID, kvm_cpuid) < 0)
+        err(1, "[!] KVM_GET_SUPPORTED_CPUID failed");
 
-   free(cpuid);
+    filterCPUID(kvm_cpuid);
+
+    if (ioctl(guest->vcpu_fd, KVM_SET_CPUID2, kvm_cpuid) < 0)
+        err(1, "[!] KVM_SET_CPUID2 failed");
+
+    free(kvm_cpuid);
    return 0;
 };
 
@@ -259,3 +267,65 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
         };
     }
 }
+
+static void print_segment(const char *name, struct kvm_segment *seg) {
+    printf(" %s       %04hx      %016lx  %08x  %02hhx    %x %x   %x  %x %x %x %x\n",
+            name, (uint16_t) seg->selector, (uint64_t) seg->base, (uint32_t) seg->limit,
+            (uint8_t) seg->type, seg->present, seg->dpl, seg->db, seg->s, seg->l, seg->g, seg->avl);
+}
+
+int dumpRegisters(struct kernelGuest *guest) {
+    unsigned long cr0, cr2, cr3;
+    unsigned long cr4, cr8;
+    unsigned long rax, rbx, rcx;
+    unsigned long rdx, rsi, rdi;
+    unsigned long rbp,  r8,  r9;
+    unsigned long r10, r11, r12;
+    unsigned long r13, r14, r15;
+    unsigned long rip, rsp;
+    struct kvm_sregs sregs;
+    unsigned long rflags;
+    struct kvm_regs regs;
+    int i;
+
+    if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
+        err(1, "[!] KVM_GET_REGS failed");
+
+    rflags = regs.rflags;
+
+    rip = regs.rip; rsp = regs.rsp;
+    rax = regs.rax; rbx = regs.rbx; rcx = regs.rcx;
+    rdx = regs.rdx; rsi = regs.rsi; rdi = regs.rdi;
+    rbp = regs.rbp; r8  = regs.r8;  r9  = regs.r9;
+    r10 = regs.r10; r11 = regs.r11; r12 = regs.r12;
+    r13 = regs.r13; r14 = regs.r14; r15 = regs.r15;
+
+    printf("\n Registers:\n");
+    printf(" ----------\n");
+    printf(" rip: %016lx   rsp: %016lx flags: %016lx\n", rip, rsp, rflags);
+    printf(" rax: %016lx   rbx: %016lx   rcx: %016lx\n", rax, rbx, rcx);
+    printf(" rdx: %016lx   rsi: %016lx   rdi: %016lx\n", rdx, rsi, rdi);
+    printf(" rbp: %016lx    r8: %016lx    r9: %016lx\n", rbp, r8,  r9);
+    printf(" r10: %016lx   r11: %016lx   r12: %016lx\n", r10, r11, r12);
+    printf(" r13: %016lx   r14: %016lx   r15: %016lx\n", r13, r14, r15);
+
+    if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
+        err(1, "KVM_GET_REGS failed");
+
+    cr0 = sregs.cr0; cr2 = sregs.cr2; cr3 = sregs.cr3;
+    cr4 = sregs.cr4; cr8 = sregs.cr8;
+
+    printf(" cr0: %016lx   cr2: %016lx   cr3: %016lx\n", cr0, cr2, cr3);
+    printf( " cr4: %016lx   cr8: %016lx\n", cr4, cr8);
+    printf("\n Segment registers:\n");
+    printf(" ------------------\n");
+    printf(" register  selector  base              limit     type  p dpl db s l g avl\n");
+    print_segment("cs ", &sregs.cs);
+    print_segment("ss ", &sregs.ss);
+    print_segment("ds ", &sregs.ds);
+    print_segment("es ", &sregs.es);
+    print_segment("fs ", &sregs.fs);
+    print_segment("gs ", &sregs.gs);
+    print_segment("tr ", &sregs.tr);
+    print_segment("ldt", &sregs.ldt);
+};
