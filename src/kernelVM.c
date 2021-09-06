@@ -46,7 +46,7 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
     int kernelFD = open(kernelImagePath, O_RDONLY);
     int initrdFD = open(initrdImagePath, O_RDONLY);
 
-    const char *kernelCmdline = "console=ttyS0";
+    const char *kernelCmdline = "console=ttyS0 root=/dev/vda";
 
     if (!kernelFD || !initrdFD) {
         err(1, "[!] Cannot open kernel image and/or initrd");
@@ -63,6 +63,11 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
     void *initrdFile = mmap(0, initrdFileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, initrdFD, 0);
     close(initrdFD);
 
+    // Setup initrd
+    void *initrdMem = (void *)(((uint8_t *)guest->mem) + INITRD_ADDR);
+    memset(initrdMem, 0, initrdFileSize);
+    memmove(initrdMem, initrdFile, initrdFileSize);
+
     struct boot_params *boot = (struct boot_params *)(((uint8_t *)guest->mem) + BOOT_PARAM_ADDR);
     void *cmdline = (void *)(((uint8_t *)guest->mem) + CMDLINE_ADDR);
     void *kernel = (void *)(((uint8_t *)guest->mem) + KERNEL_ADDR);
@@ -72,14 +77,14 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
     size_t offset = (boot->hdr.setup_sects + 1) * 512;
     boot->hdr.vid_mode = 0xfff; // VGA
     boot->hdr.type_of_loader = 0xff;
-    boot->hdr.ramdisk_image = 0x0;
-    boot->hdr.ramdisk_size = 0x0;
+    boot->hdr.ramdisk_image = INITRD_ADDR;
+    boot->hdr.ramdisk_size = initrdFileSize;
     boot->hdr.loadflags |= CAN_USE_HEAP | LOADED_HIGH | KEEP_SEGMENTS;// | 0x01 | KEEP_SEGMENTS;
     boot->hdr.heap_end_ptr = 0xFE00;
     boot->hdr.cmd_line_ptr = CMDLINE_ADDR;
-    boot->hdr.cmdline_size = 14 + 1;
+    boot->hdr.cmdline_size = strlen(kernelCmdline) + 1;
     memset(cmdline, 0, boot->hdr.cmdline_size);
-    memcpy(cmdline, "console=ttyS0", 14);
+    memcpy(cmdline, kernelCmdline, strlen(kernelCmdline));
     memmove(kernel, (char *)kernelFile + offset, kernelFileSize - offset);
 
     // Setup E820Entries
