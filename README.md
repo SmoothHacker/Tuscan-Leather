@@ -1,2 +1,2 @@
 # LateRegistration
-KVM harness for Linux Kernel Fuzzing
+Linux Kernel Snapshot Fuzzer using KVM
