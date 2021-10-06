@@ -46,7 +46,7 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
     int kernelFD = open(kernelImagePath, O_RDONLY);
     int initrdFD = open(initrdImagePath, O_RDONLY);
 
-    const char *kernelCmdline = "console=ttyS0 root=/dev/vda";
+    const char *kernelCmdline = "console=ttyS0 debug root=/dev/vda";
 
     if (!kernelFD || !initrdFD) {
         err(1, "[!] Cannot open kernel image and/or initrd");
@@ -113,6 +113,17 @@ int cleanupKernelVM(struct kernelGuest *guest) {
     return 0;
 };
 
+/*
+ * setupKernelVM
+ * The VM is setup for:
+ *      * Catching Kernel Panics
+ *      * Coverage by placing breakpoints on the kernel
+ * */
+int setupKernelVM(struct kernelGuest *guest) {
+
+    return 0;
+}
+
 int runKernelVM(struct kernelGuest *guest) {
     int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     struct kvm_run *run = mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
@@ -137,11 +148,14 @@ int runKernelVM(struct kernelGuest *guest) {
             case KVM_EXIT_HLT:
                 printf("\n\t[!] Encountered HLT instruction\n\n");
                 break;
+            case KVM_EXIT_FAIL_ENTRY:
+                printf("[!] FAIL_ENTRY: hw entry failure reason: 0x%llx", run->fail_entry.hardware_entry_failure_reason);
+                break;
             case KVM_EXIT_SHUTDOWN:
                 printf("[!] Shutdown Received\n");
                 return 0;
             default:
-                printf("reason: %d\n", run->exit_reason);
+                printf("[!] Unknown Exit Reason: %d\n", run->exit_reason);
                 return -1;
         }
     }
