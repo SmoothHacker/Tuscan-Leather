@@ -1,4 +1,5 @@
 #include "kernelVM.h"
+#include "Snapshot.h"
 
 int createKernelVM(struct kernelGuest *guest) {
     if((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
@@ -37,6 +38,13 @@ int createKernelVM(struct kernelGuest *guest) {
     if(guest->vcpu_fd < 0)
         err(1, "[!] Failed to create vcpu");
 
+    struct kvm_guest_debug debug = {
+            .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
+    };
+
+    if (ioctl(guest->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
+        perror("[!] KVM_SET_GUEST_DEBUG failed");
+
     initVMRegs(guest);
     createCPUID(guest);
     return 0;
@@ -64,13 +72,13 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
     close(initrdFD);
 
     // Setup initrd
-    void *initrdMem = (void *)(((uint8_t *)guest->mem) + INITRD_ADDR);
-    memset(initrdMem, 0, initrdFileSize);
-    memmove(initrdMem, initrdFile, initrdFileSize);
+    guest->initrdMemAddr = (void *)(((uint8_t *)guest->mem) + INITRD_ADDR);
+    memset(guest->initrdMemAddr, 0, initrdFileSize);
+    memmove(guest->initrdMemAddr, initrdFile, initrdFileSize);
 
     struct boot_params *boot = (struct boot_params *)(((uint8_t *)guest->mem) + BOOT_PARAM_ADDR);
     void *cmdline = (void *)(((uint8_t *)guest->mem) + CMDLINE_ADDR);
-    void *kernel = (void *)(((uint8_t *)guest->mem) + KERNEL_ADDR);
+    guest->kernelMemAddr = (void *)(((uint8_t *)guest->mem) + KERNEL_ADDR);
 
     memset(boot, 0, sizeof(struct boot_params));
     memmove(boot, kernelFile, sizeof(struct boot_params));
@@ -85,7 +93,7 @@ int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const c
     boot->hdr.cmdline_size = strlen(kernelCmdline) + 1;
     memset(cmdline, 0, boot->hdr.cmdline_size);
     memcpy(cmdline, kernelCmdline, strlen(kernelCmdline));
-    memmove(kernel, (char *)kernelFile + offset, kernelFileSize - offset);
+    memmove(guest->kernelMemAddr, (char *)kernelFile + offset, kernelFileSize - offset);
 
     // Setup E820Entries
     addE820Entry(boot, RealModeIvtBegin, EBDAStart - RealModeIvtBegin, E820Ram);
@@ -127,6 +135,8 @@ int setupKernelVM(struct kernelGuest *guest) {
 int runKernelVM(struct kernelGuest *guest) {
     int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     struct kvm_run *run = mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
+    int isSnapshotSet = 0;
+
     for (;;) {
         int ret = ioctl(guest->vcpu_fd, KVM_RUN, 0);
         if (ret < 0) {
@@ -149,11 +159,20 @@ int runKernelVM(struct kernelGuest *guest) {
                 printf("\n\t[!] Encountered HLT instruction\n\n");
                 break;
             case KVM_EXIT_FAIL_ENTRY:
-                printf("[!] FAIL_ENTRY: hw entry failure reason: 0x%llx", run->fail_entry.hardware_entry_failure_reason);
-                break;
+                err(1, "[!] FAIL_ENTRY: hw entry failure reason: 0x%llx\n", run->fail_entry.hardware_entry_failure_reason);
             case KVM_EXIT_SHUTDOWN:
                 printf("[!] Shutdown Received\n");
                 return 0;
+            case KVM_EXIT_DEBUG:
+                printf("[!] Encountered Debug event\n");
+                guest->runStruct = run;
+                if(!isSnapshotSet) {
+                    isSnapshotSet = 1;
+                    createSnapshot(guest);
+                } else {
+                    restoreSnapshot(guest);
+                }
+                break;
             default:
                 printf("[!] Unknown Exit Reason: %d\n", run->exit_reason);
                 return -1;
@@ -284,65 +303,3 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
         };
     }
 }
-
-static void print_segment(const char *name, struct kvm_segment *seg) {
-    printf(" %s       %04hx      %016lx  %08x  %02hhx    %x %x   %x  %x %x %x %x\n",
-            name, (uint16_t) seg->selector, (uint64_t) seg->base, (uint32_t) seg->limit,
-            (uint8_t) seg->type, seg->present, seg->dpl, seg->db, seg->s, seg->l, seg->g, seg->avl);
-}
-
-int dumpRegisters(struct kernelGuest *guest) {
-    unsigned long cr0, cr2, cr3;
-    unsigned long cr4, cr8;
-    unsigned long rax, rbx, rcx;
-    unsigned long rdx, rsi, rdi;
-    unsigned long rbp,  r8,  r9;
-    unsigned long r10, r11, r12;
-    unsigned long r13, r14, r15;
-    unsigned long rip, rsp;
-    struct kvm_sregs sregs;
-    unsigned long rflags;
-    struct kvm_regs regs;
-    int i;
-
-    if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
-        err(1, "[!] KVM_GET_REGS failed");
-
-    rflags = regs.rflags;
-
-    rip = regs.rip; rsp = regs.rsp;
-    rax = regs.rax; rbx = regs.rbx; rcx = regs.rcx;
-    rdx = regs.rdx; rsi = regs.rsi; rdi = regs.rdi;
-    rbp = regs.rbp; r8  = regs.r8;  r9  = regs.r9;
-    r10 = regs.r10; r11 = regs.r11; r12 = regs.r12;
-    r13 = regs.r13; r14 = regs.r14; r15 = regs.r15;
-
-    printf("\n Registers:\n");
-    printf(" ----------\n");
-    printf(" rip: %016lx   rsp: %016lx flags: %016lx\n", rip, rsp, rflags);
-    printf(" rax: %016lx   rbx: %016lx   rcx: %016lx\n", rax, rbx, rcx);
-    printf(" rdx: %016lx   rsi: %016lx   rdi: %016lx\n", rdx, rsi, rdi);
-    printf(" rbp: %016lx    r8: %016lx    r9: %016lx\n", rbp, r8,  r9);
-    printf(" r10: %016lx   r11: %016lx   r12: %016lx\n", r10, r11, r12);
-    printf(" r13: %016lx   r14: %016lx   r15: %016lx\n", r13, r14, r15);
-
-    if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
-        err(1, "KVM_GET_REGS failed");
-
-    cr0 = sregs.cr0; cr2 = sregs.cr2; cr3 = sregs.cr3;
-    cr4 = sregs.cr4; cr8 = sregs.cr8;
-
-    printf(" cr0: %016lx   cr2: %016lx   cr3: %016lx\n", cr0, cr2, cr3);
-    printf( " cr4: %016lx   cr8: %016lx\n", cr4, cr8);
-    printf("\n Segment registers:\n");
-    printf(" ------------------\n");
-    printf(" register  selector  base              limit     type  p dpl db s l g avl\n");
-    print_segment("cs ", &sregs.cs);
-    print_segment("ss ", &sregs.ss);
-    print_segment("ds ", &sregs.ds);
-    print_segment("es ", &sregs.es);
-    print_segment("fs ", &sregs.fs);
-    print_segment("gs ", &sregs.gs);
-    print_segment("tr ", &sregs.tr);
-    print_segment("ldt", &sregs.ldt);
-};
