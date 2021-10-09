@@ -1,11 +1,18 @@
 #include "Snapshot.h"
-
 #include <sys/time.h>
 
 struct Snapshot *snapshot;
 
+/*
+ * restoreSnapshot
+ * restores a prior saved snapshot of the vm to reset the kernel environment.
+ * */
 int restoreSnapshot(struct kernelGuest *guest) { return 0; }
 
+/*
+ * createSnapshot
+ * Creates a snapshot of the vm and stores it for later use in restoration.
+ * */
 int createSnapshot(struct kernelGuest *guest) {
   struct timeval start, stop;
   double secs = 0;

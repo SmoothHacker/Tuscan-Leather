@@ -51,6 +51,13 @@ int createKernelVM(struct kernelGuest *guest) {
   return 0;
 };
 
+/*
+ * loadKernelVM
+ * Opens bzImage and initrd and reads them into their proper memory locations.
+ * This is also where we setup the boot parameters in accordance with the
+ * linux x86 boot protocol and inform the kernel of the memory locations
+ * via e820 entries.
+ * */
 int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
                  const char *initrdImagePath) {
   int kernelFD = open(kernelImagePath, O_RDONLY);
@@ -121,6 +128,7 @@ int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
       .type = type,
   };
   boot->e820_entries = i + 1;
+  return 0;
 }
 
 int cleanupKernelVM(struct kernelGuest *guest) {
@@ -132,13 +140,9 @@ int cleanupKernelVM(struct kernelGuest *guest) {
 };
 
 /*
- * setupKernelVM
- * The VM is setup for:
- *      * Catching Kernel Panics
- *      * Coverage by placing breakpoints on the kernel
+ * runKernelVM
+ * The main execution loop for the VM.
  * */
-int setupKernelVM(struct kernelGuest *guest) { return 0; }
-
 int runKernelVM(struct kernelGuest *guest) {
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
   struct kvm_run *run =
@@ -191,6 +195,11 @@ int runKernelVM(struct kernelGuest *guest) {
   }
 };
 
+/*
+ * initVMRegs
+ * Sets up registers for the VM.
+ * Sourced from the Linux x86 boot protocol.
+ * */
 int initVMRegs(struct kernelGuest *guest) {
   struct kvm_regs regs;
   struct kvm_sregs sregs;
@@ -242,6 +251,11 @@ int initVMRegs(struct kernelGuest *guest) {
   return 0;
 };
 
+/*
+ * createCPUID
+ * Setup the CPUID instruction for linux to recognize this harness as KVM and
+ * what processor features are available to the operating system.
+ * */
 int createCPUID(struct kernelGuest *guest) {
   struct kvm_cpuid2 *kvm_cpuid;
 
@@ -312,4 +326,5 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
       break;
     };
   }
+  return 0;
 }

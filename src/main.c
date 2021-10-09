@@ -36,4 +36,6 @@ int main(int argc, char **argv) {
   runKernelVM(&guest);
   cleanupKernelVM(&guest);
   printf("[*] Destroyed Kernel VM\n");
+
+  return 0;
 }
