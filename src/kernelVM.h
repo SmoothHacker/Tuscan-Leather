@@ -40,13 +40,21 @@ struct kernelGuest {
 };
 
 int createKernelVM(struct kernelGuest *guest);
-int loadKernelVM(struct kernelGuest *guest, const char* kernelImagePath, const char* initrdImagePath);
+
+int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath, const char *initrdImagePath);
+
 int cleanupKernelVM(struct kernelGuest *guest);
+
 int runKernelVM(struct kernelGuest *guest);
+
 int setupKernelVM(struct kernelGuest *guest);
+
 int initVMRegs(struct kernelGuest *guest);
+
 int createCPUID(struct kernelGuest *guest);
+
 int filterCPUID(struct kvm_cpuid2 *cpuid);
-int addE820Entry(struct boot_params* boot, uint64_t addr, uint64_t size, uint32_t type);
+
+int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size, uint32_t type);
 
 #endif //LATEREGISTRATION_KERNELVM_H
