@@ -7,7 +7,27 @@ struct Snapshot *snapshot;
  * restoreSnapshot
  * restores a prior saved snapshot of the vm to reset the kernel environment.
  * */
-int restoreSnapshot(struct kernelGuest *guest) { return 0; }
+int restoreSnapshot(struct kernelGuest *guest) {
+  struct timeval start, stop;
+  double secs = 0;
+
+  gettimeofday(&start, NULL);
+
+  if (ioctl(guest->vcpu_fd, KVM_SET_SREGS, &snapshot->sregs) < 0)
+    err(1, "[!] Failed to set special registers - snapshot");
+
+  if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
+    err(1, "[!] Failed to set registers - snapshot");
+
+  // clear breakpoint
+  memcpy(guest->mem, snapshot->mem, MEM_SIZE);
+
+  gettimeofday(&stop, NULL);
+  secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 +
+         (double)(stop.tv_sec - start.tv_sec);
+  printf("time taken %f\n", secs);
+  return 0;
+}
 
 /*
  * createSnapshot
@@ -18,8 +38,7 @@ int createSnapshot(struct kernelGuest *guest) {
   double secs = 0;
 
   gettimeofday(&start, NULL);
-
-  snapshot = calloc(1, sizeof(struct Snapshot));
+  snapshot = malloc(sizeof(struct Snapshot));
 
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &snapshot->sregs) < 0)
     err(1, "[!] Failed to get special registers");

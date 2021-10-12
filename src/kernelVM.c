@@ -185,7 +185,6 @@ int runKernelVM(struct kernelGuest *guest) {
         createSnapshot(guest);
       } else {
         restoreSnapshot(guest);
-        return 0;
       }
       break;
     default:

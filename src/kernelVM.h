@@ -48,8 +48,6 @@ int cleanupKernelVM(struct kernelGuest *guest);
 
 int runKernelVM(struct kernelGuest *guest);
 
-int setupKernelVM(struct kernelGuest *guest);
-
 int initVMRegs(struct kernelGuest *guest);
 
 int createCPUID(struct kernelGuest *guest);

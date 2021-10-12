@@ -32,10 +32,9 @@ int main(int argc, char **argv) {
   loadKernelVM(&guest, argv[1], argv[2]);
   printf("[*] Loaded kernel image %s\n", argv[1]);
   printf("[*] Starting up VM\n");
-  setupKernelVM(&guest);
   runKernelVM(&guest);
   cleanupKernelVM(&guest);
-  printf("[*] Destroyed Kernel VM\n");
+  printf("[*] Destroyed Kernel VM - Success\n");
 
   return 0;
 }
