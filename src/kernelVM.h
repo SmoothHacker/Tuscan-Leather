@@ -29,6 +29,10 @@
 #define MBBIOSBegin 0x000f0000
 #define MBBIOSEnd 0x000fffff
 
+// KVM Constants - not supported in kernel 5.4
+#define KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE (1 << 0)
+#define KVM_DIRTY_LOG_INITIALLY_SET (1 << 1)
+
 struct kernelGuest {
   int vmfd;
   int vcpu_fd;

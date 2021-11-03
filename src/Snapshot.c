@@ -39,6 +39,7 @@ int createSnapshot(struct kernelGuest *guest) {
 
   gettimeofday(&start, NULL);
   snapshot = malloc(sizeof(struct Snapshot));
+  memset(snapshot, 0x0, sizeof(struct Snapshot));
 
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &snapshot->sregs) < 0)
     err(1, "[!] Failed to get special registers");
@@ -49,6 +50,13 @@ int createSnapshot(struct kernelGuest *guest) {
   // clear breakpoint
   snapshot->mem = malloc(MEM_SIZE); // Allocate VM memory
   memcpy(snapshot->mem, guest->mem, MEM_SIZE);
+
+  printf("[*] Writing to File");
+  FILE *snapshotDump = fopen("/home/scott/LinuxVR/Snapshot-linux.dump", "w+");
+  if (!snapshotDump)
+    perror("[!] File Dump failed to open");
+  fwrite(snapshot->mem, MEM_SIZE, 1, snapshotDump);
+  fclose(snapshotDump);
 
   gettimeofday(&stop, NULL);
   secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 +

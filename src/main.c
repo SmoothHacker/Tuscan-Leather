@@ -30,7 +30,8 @@ int main(int argc, char **argv) {
   createKernelVM(&guest);
   printf("[*] Created KernelVM\n");
   loadKernelVM(&guest, argv[1], argv[2]);
-  printf("[*] Loaded kernel image %s\n", argv[1]);
+  printf("[*] Loaded kernel image: %s\n", argv[1]);
+  printf("[*] Loaded initrd image: %s\n", argv[2]);
   printf("[*] Starting up VM\n");
   runKernelVM(&guest);
   cleanupKernelVM(&guest);

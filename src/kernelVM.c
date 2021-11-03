@@ -1,10 +1,20 @@
-#include "kernelVM.h"
+#define _GNU_SOURCE
+#include <string.h>
 
 #include "Snapshot.h"
+#include "kernelVM.h"
 
 int createKernelVM(struct kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
     err(1, "[!] VM creation failed");
+
+  if (!ioctl(guest->vmfd, KVM_CHECK_EXTENSION,
+             KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2))
+    err(1, "[!] KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 is not supported");
+
+  if (!ioctl(guest->vmfd, KVM_ENABLE_CAP, KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
+             KVM_DIRTY_LOG_INITIALLY_SET | KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE))
+    err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
 
   if (ioctl(guest->vmfd, KVM_SET_TSS_ADDR, 0xffffd000) < 0)
     err(1, "[!] Failed to set TSS addr");
@@ -22,11 +32,12 @@ int createKernelVM(struct kernelGuest *guest) {
 
   guest->mem = mmap(NULL, MEM_SIZE, PROT_READ | PROT_WRITE,
                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  memset(guest->mem, 0x0, MEM_SIZE);
   if (!guest->mem)
     err(1, "[!] Failed to mmap VM memory");
 
   struct kvm_userspace_memory_region region = {.slot = 0,
-                                               .flags = 0,
+                                               .flags = KVM_MEM_LOG_DIRTY_PAGES,
                                                .guest_phys_addr = 0,
                                                .memory_size = MEM_SIZE,
                                                .userspace_addr =
@@ -39,13 +50,16 @@ int createKernelVM(struct kernelGuest *guest) {
   if (guest->vcpu_fd < 0)
     err(1, "[!] Failed to create vcpu");
 
+  /*
+   * For some reason the alterative_instructions function in the kernel is
+   * triggered cause an interrupt. Don't know a way to resolve and proceed
   struct kvm_guest_debug debug = {
       .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
   };
 
   if (ioctl(guest->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
     perror("[!] KVM_SET_GUEST_DEBUG failed");
-
+*/
   initVMRegs(guest);
   createCPUID(guest);
   return 0;
@@ -178,14 +192,12 @@ int runKernelVM(struct kernelGuest *guest) {
       return 0;
     case KVM_EXIT_DEBUG:
       printf("[!] Encountered Debug event\n");
-      guest->runStruct = run;
-      if (!isSnapshotSet) {
-        isSnapshotSet = 1;
-        printf("[!] Creating Snapshot\n");
-        createSnapshot(guest);
-      } else {
-        restoreSnapshot(guest);
-      }
+      struct kvm_regs regs;
+      if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
+        err(1, "[!] Failed to get registers");
+
+      printf("RIP = %llx\n", regs.rip);
+      exit(-1);
       break;
     default:
       printf("[!] Unknown Exit Reason: %d\n", run->exit_reason);
