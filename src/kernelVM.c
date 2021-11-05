@@ -161,7 +161,6 @@ int runKernelVM(struct kernelGuest *guest) {
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
   struct kvm_run *run =
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
-  int isSnapshotSet = 0;
 
   for (;;) {
     int ret = ioctl(guest->vcpu_fd, KVM_RUN, 0);
