@@ -14,11 +14,19 @@ allows us to boot linux from start, create the snapshot, fuzz, and restore all i
 ## Future Plans
 
 * Guest Memory Access System
-    * An API to access and modify vm memory. Useful for the breakpoint system
+  * An API to access and modify vm memory. Useful for the breakpoint system
 * Breakpoint System
-    * We place a breakpoint at the start of all kernel basic blocks. This allows us to track if we're hitting new kernel
-      code
-    * Breakpoints feed by file with a format provided in a python script that uses Binary Ninja
+  * We place a breakpoint at the start of all kernel basic blocks. This allows us to track if we're hitting new kernel
+    code
+  * Breakpoints feed by file with a format provided in a python script that uses Binary Ninja
 * Syscall Fuzzing
-    * Basic version of syscall fuzzing
-        * Likely restricted set because of parameters and structs
+  * Basic version of syscall fuzzing
+    * Likely restricted set because of parameters and structs
+* Device Driver Fuzzing
+  * Allows basic emulation of a physical device to allow Linux to apply the desired driver to
+  * PCI, USB, Bluetooth, Network, etc...
+* OS Handler
+  * Kernel Module that communicates with the harness
+    * Retrieves /proc/kallsyms contents for coverage
+    * Sends information about key kernel structs
+    * Allows communication with a fuzz case runner and the harness
