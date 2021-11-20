@@ -1,7 +1,7 @@
 obj-m := os_handler.o
 os_handler-objs := main.o
 
-LinuxSourcePath := # Path to the root of the linux kernel repo
+LinuxSourcePath := /home/scott/LinuxVR/linux-5.13.9
 
 all:
 	make -C $(LinuxSourcePath) M=$(PWD) modules
