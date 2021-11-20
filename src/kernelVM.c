@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "Snapshot.h"
-#include "kernelVM.h"
 
 int createKernelVM(struct kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
@@ -51,7 +50,7 @@ int createKernelVM(struct kernelGuest *guest) {
     err(1, "[!] Failed to create vcpu");
 
   /*
-   * For some reason the alterative_instructions function in the kernel is
+   * For some reason the alternative_instructions function in the kernel is
    * triggered cause an interrupt. Don't know a way to resolve and proceed
   struct kvm_guest_debug debug = {
       .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
@@ -78,7 +77,7 @@ int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
   int initrdFD = open(initrdImagePath, O_RDONLY);
 
   // TODO Make this configurable at runtime
-  const char *kernelCmdline = "console=ttyS0 debug nokaslr root=/dev/vda";
+  const char *kernelCmdline = "console=ttyS0 nokaslr root=/dev/vda";
 
   if (!kernelFD || !initrdFD) {
     err(1, "[!] Cannot open kernel image and/or initrd");
@@ -119,7 +118,7 @@ int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
       CAN_USE_HEAP | LOADED_HIGH | KEEP_SEGMENTS; // | 0x01 | KEEP_SEGMENTS;
   boot->hdr.heap_end_ptr = 0xFE00;
   boot->hdr.cmd_line_ptr = CMDLINE_ADDR;
-  boot->hdr.cmdline_size = strlen(kernelCmdline) + 1;
+  boot->hdr.cmdline_size = strlen(kernelCmdline);
   memset(cmdline, 0, boot->hdr.cmdline_size);
   memcpy(cmdline, kernelCmdline, strlen(kernelCmdline));
   memmove(guest->kernelMemAddr, (char *)kernelFile + offset,
@@ -174,14 +173,19 @@ int runKernelVM(struct kernelGuest *guest) {
         uint32_t size = run->io.size;
         uint64_t offset = run->io.data_offset;
         printf("%.*s", size * run->io.count, (char *)run + offset);
-      } else if (run->io.port == 0x3f8 + 5 &&
-                 run->io.direction == KVM_EXIT_IO_IN) {
+      } else if (run->io.port == 0x3fd && run->io.direction == KVM_EXIT_IO_IN) {
         char *value = (char *)run + run->io.data_offset;
         *value = 0x20;
+      } else if (run->io.port == 0xdead &&
+                 run->io.direction == KVM_EXIT_IO_OUT) {
+
+        uint8_t *data_addr = (uint8_t *)run + run->io.data_offset;
+        printf("[!] Got Data!!!!!!\n[!] Port 0xdead: 0x%x\n", *data_addr);
       }
       break;
     case KVM_EXIT_HLT:
       printf("\n\t[!] Encountered HLT instruction\n\n");
+      exit(-1);
       break;
     case KVM_EXIT_FAIL_ENTRY:
       err(1, "[!] FAIL_ENTRY: hw entry failure reason: 0x%llx\n",
