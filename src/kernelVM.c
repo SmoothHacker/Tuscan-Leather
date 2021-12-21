@@ -79,7 +79,7 @@ int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
   // TODO Make this configurable at runtime
   const char *kernelCmdline = "console=ttyS0 nokaslr root=/dev/vda";
 
-  if (!kernelFD || !initrdFD) {
+  if ((kernelFD == -1) || (initrdFD == -1)) {
     err(1, "[!] Cannot open kernel image and/or initrd");
   }
 
@@ -169,20 +169,32 @@ int runKernelVM(struct kernelGuest *guest) {
 
     switch (run->exit_reason) {
     case KVM_EXIT_IO:
-      if (run->io.port == 0x3f8 && run->io.direction == KVM_EXIT_IO_OUT) {
-        uint32_t size = run->io.size;
-        uint64_t offset = run->io.data_offset;
-        printf("%.*s", size * run->io.count, (char *)run + offset);
-      } else if (run->io.port == 0x3fd && run->io.direction == KVM_EXIT_IO_IN) {
-        char *value = (char *)run + run->io.data_offset;
-        *value = 0x20;
-      } else if (run->io.port == 0xdead &&
-                 run->io.direction == KVM_EXIT_IO_OUT) {
+      switch (run->io.port) {
+      case 0x3f8:
+        if (run->io.direction == KVM_EXIT_IO_OUT) {
+          struct iovec iov = {
+              .iov_base = (char *)run + run->io.data_offset,
+              .iov_len = 1,
+          };
+          writev(STDOUT_FILENO, &iov, 1);
+        }
+        break;
+      case 0x3fd:
+        if (run->io.direction == KVM_EXIT_IO_IN)
+          *((char *)run + run->io.data_offset) = 0x20; // for console input
+        break;
+      case 0xdead:
+        if (run->io.direction == KVM_EXIT_IO_OUT) {
+          uint8_t *ioctl_cmd = (uint8_t *)run + run->io.data_offset;
+          printf("[!] Port 0xdead: 0x%x\n", *ioctl_cmd);
 
-        uint8_t *data_addr = (uint8_t *)run + run->io.data_offset;
-        printf("[!] Got Data!!!!!!\n[!] Port 0xdead: 0x%x\n", *data_addr);
+        } else {
+          puts("[!] Got request to send byte");
+        }
+        break;
+      default:
+        break;
       }
-      break;
     case KVM_EXIT_HLT:
       printf("\n\t[!] Encountered HLT instruction\n\n");
       exit(-1);

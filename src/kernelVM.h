@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/uio.h>
 
 #define MEM_SIZE 1 << 30
 #define BOOT_PARAM_ADDR 0x10000
