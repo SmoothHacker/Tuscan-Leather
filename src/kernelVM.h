@@ -62,4 +62,6 @@ int filterCPUID(struct kvm_cpuid2 *cpuid);
 int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
                  uint32_t type);
 
+int dumpVCPURegs(struct kernelGuest *guest);
+
 #endif // LATEREGISTRATION_KERNELVM_H

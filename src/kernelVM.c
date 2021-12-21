@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <string.h>
 
 #include "Snapshot.h"
@@ -15,7 +14,7 @@ int createKernelVM(struct kernelGuest *guest) {
              KVM_DIRTY_LOG_INITIALLY_SET | KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE))
     err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
 
-  if (ioctl(guest->vmfd, KVM_SET_TSS_ADDR, 0xffffd000) < 0)
+  if (ioctl(guest->vmfd, KVM_SET_TSS_ADDR, 0xfffbd000) < 0)
     err(1, "[!] Failed to set TSS addr");
 
   uint64_t map_addr = 0xffffc000;
@@ -30,10 +29,12 @@ int createKernelVM(struct kernelGuest *guest) {
     err(1, "[!] Failed to create i8254 interval timer");
 
   guest->mem = mmap(NULL, MEM_SIZE, PROT_READ | PROT_WRITE,
-                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  memset(guest->mem, 0x0, MEM_SIZE);
+                    MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+
   if (!guest->mem)
     err(1, "[!] Failed to mmap VM memory");
+
+  madvise(guest->mem, MEM_SIZE, MADV_MERGEABLE);
 
   struct kvm_userspace_memory_region region = {.slot = 0,
                                                .flags = KVM_MEM_LOG_DIRTY_PAGES,
@@ -62,7 +63,7 @@ int createKernelVM(struct kernelGuest *guest) {
   initVMRegs(guest);
   createCPUID(guest);
   return 0;
-};
+}
 
 /*
  * loadKernelVM
@@ -130,7 +131,7 @@ int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
   addE820Entry(boot, MBBIOSBegin, MBBIOSEnd - MBBIOSBegin, E820Reserved);
   addE820Entry(boot, KERNEL_ADDR, (MEM_SIZE)-KERNEL_ADDR, E820Ram);
   return 0;
-};
+}
 
 int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
                  uint32_t type) {
@@ -150,7 +151,7 @@ int cleanupKernelVM(struct kernelGuest *guest) {
   close(guest->kvm_fd);
   munmap(guest->mem, 1 << 30);
   return 0;
-};
+}
 
 /*
  * runKernelVM
@@ -192,13 +193,16 @@ int runKernelVM(struct kernelGuest *guest) {
           puts("[!] Got request to send byte");
         }
         break;
+      case 0x2f8 ... 0x2e8:
+        printf("[!] Got data on port %d\n", run->io.port);
+        break;
       default:
         break;
       }
     case KVM_EXIT_HLT:
       printf("\n\t[!] Encountered HLT instruction\n\n");
+      dumpVCPURegs(guest);
       exit(-1);
-      break;
     case KVM_EXIT_FAIL_ENTRY:
       err(1, "[!] FAIL_ENTRY: hw entry failure reason: 0x%llx\n",
           run->fail_entry.hardware_entry_failure_reason);
@@ -213,13 +217,12 @@ int runKernelVM(struct kernelGuest *guest) {
 
       printf("RIP = %llx\n", regs.rip);
       exit(-1);
-      break;
     default:
       printf("[!] Unknown Exit Reason: %d\n", run->exit_reason);
       return -1;
     }
   }
-};
+}
 
 /*
  * initVMRegs
@@ -275,7 +278,7 @@ int initVMRegs(struct kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &regs) < 0)
     err(1, "[!] Failed to set registers");
   return 0;
-};
+}
 
 /*
  * createCPUID
@@ -298,7 +301,7 @@ int createCPUID(struct kernelGuest *guest) {
 
   free(kvm_cpuid);
   return 0;
-};
+}
 
 int filterCPUID(struct kvm_cpuid2 *cpuid) {
   // Remove CPUID functions that are not supported by LateRegistration
@@ -342,7 +345,7 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
        */
       if (entry->eax) {
         eax.full = entry->eax;
-        if (eax.split.version_id != 2 || !eax.split.num_counters)
+        if (eax.split.version_id != 2u || !eax.split.num_counters)
           entry->eax = 0;
       }
       break;
@@ -350,7 +353,34 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
     default:
       // Keep the CPUID function as -is
       break;
-    };
+    }
   }
+  return 0;
+}
+
+int dumpVCPURegs(struct kernelGuest *guest) {
+  struct kvm_regs regs;
+  if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
+    err(1, "[!] Failed to get registers - dumpVCPURegs");
+
+  printf("[*] Register Dump\n");
+  printf("[*] rax: 0x%016llx\n", regs.rax);
+  printf("[*] rbx: 0x%016llx\n", regs.rbx);
+  printf("[*] rcx: 0x%016llx\n", regs.rcx);
+  printf("[*] rdx: 0x%016llx\n", regs.rdx);
+  printf("[*] rsp: 0x%016llx\n", regs.rsp);
+  printf("[*] rbp: 0x%016llx\n", regs.rbp);
+  printf("[*] rsi: 0x%016llx\n", regs.rsi);
+  printf("[*] rdi: 0x%016llx\n", regs.rdi);
+  printf("[*] rip: 0x%016llx\n", regs.rip);
+  printf("[*] r8:  0x%016llx\n", regs.r8);
+  printf("[*] r9:  0x%016llx\n", regs.r9);
+  printf("[*] r10: 0x%016llx\n", regs.r10);
+  printf("[*] r11: 0x%016llx\n", regs.r11);
+  printf("[*] r12: 0x%016llx\n", regs.r12);
+  printf("[*] r13: 0x%016llx\n", regs.r13);
+  printf("[*] r14: 0x%016llx\n", regs.r14);
+  printf("[*] r15: 0x%016llx\n", regs.r15);
+
   return 0;
 }
