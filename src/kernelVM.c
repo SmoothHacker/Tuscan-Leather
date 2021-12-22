@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "Snapshot.h"
+#include "../os-handler/fuzzRunner.h"
 
 int createKernelVM(struct kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
@@ -169,7 +170,7 @@ int runKernelVM(struct kernelGuest *guest) {
     }
 
     switch (run->exit_reason) {
-    case KVM_EXIT_IO:
+    case KVM_EXIT_IO: // TODO: Add system for ttys to be sent to stdout.
       switch (run->io.port) {
       case 0x3f8:
         if (run->io.direction == KVM_EXIT_IO_OUT) {
@@ -184,21 +185,31 @@ int runKernelVM(struct kernelGuest *guest) {
         if (run->io.direction == KVM_EXIT_IO_IN)
           *((char *)run + run->io.data_offset) = 0x20; // for console input
         break;
-      case 0xdead:
+      case 0xdead: // Port Reserved by os-handler kernel module
         if (run->io.direction == KVM_EXIT_IO_OUT) {
           uint8_t *ioctl_cmd = (uint8_t *)run + run->io.data_offset;
-          printf("[!] Port 0xdead: 0x%x\n", *ioctl_cmd);
+          // printf("[!] Port 0xdead: 0x%x\n", *ioctl_cmd);
 
-        } else {
-          puts("[!] Got request to send byte");
+          switch (*ioctl_cmd) {
+          case TAKE_SNAPSHOT:
+            // printf("[*] Taking Snapshot\n");
+            createSnapshot(guest);
+            break;
+          case RESTORE_VM:
+            // printf("[*] Restoring Snapshot\n");
+            restoreSnapshot(guest);
+            break;
+          default:
+            printf("[!] Unknown ioctl command from os-handler: %d\n",
+                   *ioctl_cmd);
+            break;
+          }
         }
-        break;
-      case 0x2f8 ... 0x2e8:
-        printf("[!] Got data on port %d\n", run->io.port);
         break;
       default:
         break;
       }
+      break;
     case KVM_EXIT_HLT:
       printf("\n\t[!] Encountered HLT instruction\n\n");
       dumpVCPURegs(guest);
@@ -211,11 +222,7 @@ int runKernelVM(struct kernelGuest *guest) {
       return 0;
     case KVM_EXIT_DEBUG:
       printf("[!] Encountered Debug event\n");
-      struct kvm_regs regs;
-      if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
-        err(1, "[!] Failed to get registers");
-
-      printf("RIP = %llx\n", regs.rip);
+      dumpVCPURegs(guest);
       exit(-1);
     default:
       printf("[!] Unknown Exit Reason: %d\n", run->exit_reason);

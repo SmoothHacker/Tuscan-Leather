@@ -8,6 +8,7 @@ struct Snapshot {
     void *mem;
     struct kvm_regs regs;
     struct kvm_sregs sregs;
+    struct kvm_irqchip irqchip;
 };
 
 extern struct Snapshot *snapshot;

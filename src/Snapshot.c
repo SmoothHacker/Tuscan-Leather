@@ -19,13 +19,16 @@ int restoreSnapshot(struct kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
     err(1, "[!] Failed to set registers - snapshot");
 
-  // clear breakpoint
   memcpy(guest->mem, snapshot->mem, MEM_SIZE);
+
+  // fetch IRQCHIP state
+  if (ioctl(guest->vmfd, KVM_SET_IRQCHIP, &snapshot->irqchip) < 0)
+    err(1, "[!] Failed to set IRQCHIP");
 
   gettimeofday(&stop, NULL);
   secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 +
          (double)(stop.tv_sec - start.tv_sec);
-  printf("time taken %f\n", secs);
+  printf("[*] Restore - time taken %f\n", secs);
   return 0;
 }
 
@@ -47,20 +50,17 @@ int createSnapshot(struct kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &snapshot->regs) < 0)
     err(1, "[!] Failed to get registers");
 
-  // clear breakpoint
+  snapshot->regs.rip += 1; // needed to go past out instruction in ioctl handler
   snapshot->mem = malloc(MEM_SIZE); // Allocate VM memory
   memcpy(snapshot->mem, guest->mem, MEM_SIZE);
 
-  printf("[*] Writing to File");
-  FILE *snapshotDump = fopen("/home/scott/LinuxVR/Snapshot-linux.dump", "w+");
-  if (!snapshotDump)
-    perror("[!] File Dump failed to open");
-  fwrite(snapshot->mem, MEM_SIZE, 1, snapshotDump);
-  fclose(snapshotDump);
+  // fetch IRQCHIP state
+  if (ioctl(guest->vmfd, KVM_GET_IRQCHIP, &snapshot->irqchip) < 0)
+    err(1, "[!] Failed to get IRQCHIP");
 
   gettimeofday(&stop, NULL);
   secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 +
          (double)(stop.tv_sec - start.tv_sec);
-  printf("time taken %f\n", secs);
+  printf("[*] Snapshot - time taken %f\n", secs);
   return 0;
 }
