@@ -5,6 +5,13 @@
 #include <linux/init.h>
 #include <linux/ioctl.h>
 #include <linux/kdev_t.h>
+#include <asm/io.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/fs.h>
+#include <linux/init.h>
+#include <linux/ioctl.h>
+#include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>    //kmalloc()
@@ -63,11 +70,16 @@ static ssize_t write(struct file *filp, const char __user *buf, size_t len,
 
 // This function will be called when we write IOCTL on the Device file
 static long lr_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
-  pr_alert("[!] lr-hypervisor ioctl issued - cmd: %d\n", cmd);
+  // pr_alert("[!] lr-hypervisor ioctl issued - cmd: %d\n", cmd);
 
   switch (cmd) {
   case TAKE_SNAPSHOT:
-    outb(0xff, PORT_1);
+    // pr_alert("[*] Snapshoting VM\n");
+    outb_p(TAKE_SNAPSHOT, PORT_1);
+    break;
+  case RESTORE_VM:
+    // pr_alert("[*] Restoring VM\n");
+    outb_p(RESTORE_VM, PORT_1);
     break;
   default:
     break;
