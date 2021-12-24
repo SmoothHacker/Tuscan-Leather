@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "Snapshot.h"
+#include "snapshot.h"
 #include "../os-handler/fuzzRunner.h"
 
 int createKernelVM(struct kernelGuest *guest) {
@@ -192,11 +192,11 @@ int runKernelVM(struct kernelGuest *guest) {
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
-            // printf("[*] Taking Snapshot\n");
+            // printf("[*] Taking snapshot\n");
             createSnapshot(guest);
             break;
           case RESTORE_VM:
-            // printf("[*] Restoring Snapshot\n");
+            // printf("[*] Restoring snapshot\n");
             restoreSnapshot(guest);
             break;
           default:

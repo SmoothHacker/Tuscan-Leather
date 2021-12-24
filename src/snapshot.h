@@ -4,14 +4,14 @@
 #include <linux/kvm.h>
 #include "kernelVM.h"
 
-struct Snapshot {
-    void *mem;
-    struct kvm_regs regs;
-    struct kvm_sregs sregs;
-    struct kvm_irqchip irqchip;
+struct snapshot {
+  void *mem;
+  struct kvm_regs regs;
+  struct kvm_sregs sregs;
+  struct kvm_irqchip irqchip;
 };
 
-extern struct Snapshot *snapshot;
+extern struct snapshot *snapshot;
 
 int restoreSnapshot(struct kernelGuest *guest);
 int createSnapshot(struct kernelGuest *guest);

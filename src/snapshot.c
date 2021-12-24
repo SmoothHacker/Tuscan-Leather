@@ -1,7 +1,7 @@
-#include "Snapshot.h"
+#include "snapshot.h"
 #include <sys/time.h>
 
-struct Snapshot *snapshot;
+struct snapshot *snapshot;
 
 /*
  * restoreSnapshot
@@ -41,8 +41,8 @@ int createSnapshot(struct kernelGuest *guest) {
   double secs = 0;
 
   gettimeofday(&start, NULL);
-  snapshot = malloc(sizeof(struct Snapshot));
-  memset(snapshot, 0x0, sizeof(struct Snapshot));
+  snapshot = malloc(sizeof(struct snapshot));
+  memset(snapshot, 0x0, sizeof(struct snapshot));
 
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &snapshot->sregs) < 0)
     err(1, "[!] Failed to get special registers");
@@ -61,6 +61,6 @@ int createSnapshot(struct kernelGuest *guest) {
   gettimeofday(&stop, NULL);
   secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 +
          (double)(stop.tv_sec - start.tv_sec);
-  printf("[*] Snapshot - time taken %f\n", secs);
+  printf("[*] snapshot - time taken %f\n", secs);
   return 0;
 }
