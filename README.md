@@ -11,6 +11,9 @@ allows us to boot linux, create a snapshot, fuzz, and restore all in KVM.
 
 `./LateRegistration <Path to bzImage> <initrd>`
 
+## OS Handler
+The OS Handler is a kernel module that allows the fuzz case runner to communicate with the hypervisor. Currently the kernel module is a character device that allows the fuzz case runner to issue IOCTL commands. Available commands are in [fuzzRunner.h](os-handler/fuzzRunner.h).
+
 ## Future Plans
 
 * Guest Memory Access System
