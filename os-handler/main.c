@@ -115,5 +115,5 @@ module_exit(lr_driver_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Scott Lagler <laglerscott@gmail.com>");
-MODULE_DESCRIPTION("LateRegistration - OS Handler");
+MODULE_DESCRIPTION("Tuscan Leather - OS Handler");
 MODULE_VERSION("1.0");

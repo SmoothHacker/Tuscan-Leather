@@ -9,11 +9,11 @@
 
 int main(int argc, char **argv) {
   if (argc != 3) {
-    fprintf(stderr, "Usage: ./LateRegistration <bzImage> <initrd>\n");
+    fprintf(stderr, "Usage: ./Tuscan-Leather <bzImage> <initrd>\n");
     return -1;
   }
 
-  printf("LateRegistration - Linux Kernel Hypervisor\n");
+  printf("Tuscan-Leather - Linux Kernel Hypervisor\n");
   struct kernelGuest guest;
 
   guest.kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
@@ -29,12 +29,16 @@ int main(int argc, char **argv) {
 
   createKernelVM(&guest);
   printf("[*] Created KernelVM\n");
+
   loadKernelVM(&guest, argv[1], argv[2]);
+
   printf("[*] Loaded kernel image: %s\n", argv[1]);
   printf("[*] Loaded initrd image: %s\n", argv[2]);
   printf("[*] Starting up VM\n");
+
   runKernelVM(&guest);
   cleanupKernelVM(&guest);
+
   printf("[*] Destroyed Kernel VM - Success\n");
 
   return 0;

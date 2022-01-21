@@ -1,5 +1,5 @@
-#ifndef LATEREGISTRATION_SNAPSHOT_H
-#define LATEREGISTRATION_SNAPSHOT_H
+#ifndef TUSCAN_LEATHER_SNAPSHOT_H
+#define TUSCAN_LEATHER_SNAPSHOT_H
 
 #include <linux/kvm.h>
 #include "kernelVM.h"
@@ -16,4 +16,4 @@ extern struct snapshot *snapshot;
 int restoreSnapshot(struct kernelGuest *guest);
 int createSnapshot(struct kernelGuest *guest);
 
-#endif //LATEREGISTRATION_SNAPSHOT_H
+#endif // TUSCAN_LEATHER_SNAPSHOT_H

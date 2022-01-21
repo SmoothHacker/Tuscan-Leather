@@ -1,7 +1,7 @@
 #include <string.h>
 
-#include "snapshot.h"
 #include "../os-handler/fuzzRunner.h"
+#include "snapshot.h"
 
 int createKernelVM(struct kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
@@ -51,16 +51,6 @@ int createKernelVM(struct kernelGuest *guest) {
   if (guest->vcpu_fd < 0)
     err(1, "[!] Failed to create vcpu");
 
-  /*
-   * For some reason the alternative_instructions function in the kernel is
-   * triggered cause an interrupt. Don't know a way to resolve and proceed
-  struct kvm_guest_debug debug = {
-      .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
-  };
-
-  if (ioctl(guest->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
-    perror("[!] KVM_SET_GUEST_DEBUG failed");
-*/
   initVMRegs(guest);
   createCPUID(guest);
   return 0;
@@ -154,6 +144,18 @@ int cleanupKernelVM(struct kernelGuest *guest) {
   return 0;
 }
 
+int enableDebug(struct kernelGuest *guest) {
+  /* For some reason the alternative_instructions function in the kernel is
+   * triggered cause an interrupt. Don't know a way to resolve and proceed
+   */
+  struct kvm_guest_debug debug = {
+      .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
+  };
+
+  if (ioctl(guest->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
+    perror("[!] KVM_SET_GUEST_DEBUG failed");
+}
+
 /*
  * runKernelVM
  * The main execution loop for the VM.
@@ -173,22 +175,17 @@ int runKernelVM(struct kernelGuest *guest) {
     case KVM_EXIT_IO: // TODO: Add system for ttys to be sent to stdout.
       switch (run->io.port) {
       case 0x3f8:
-        if (run->io.direction == KVM_EXIT_IO_OUT) {
-          struct iovec iov = {
-              .iov_base = (char *)run + run->io.data_offset,
-              .iov_len = 1,
-          };
-          writev(STDOUT_FILENO, &iov, 1);
-        }
+        if (run->io.direction == KVM_EXIT_IO_OUT)
+          write(STDOUT_FILENO, (char *)run + run->io.data_offset, 1);
         break;
       case 0x3fd:
         if (run->io.direction == KVM_EXIT_IO_IN)
-          *((char *)run + run->io.data_offset) = 0x20; // for console input
+          *((char *)run + run->io.data_offset) =
+              0x20; // for console input to be replaced by emulation framework
         break;
       case 0xdead: // Port Reserved by os-handler kernel module
         if (run->io.direction == KVM_EXIT_IO_OUT) {
           uint8_t *ioctl_cmd = (uint8_t *)run + run->io.data_offset;
-          // printf("[!] Port 0xdead: 0x%x\n", *ioctl_cmd);
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
@@ -198,6 +195,9 @@ int runKernelVM(struct kernelGuest *guest) {
           case RESTORE_VM:
             // printf("[*] Restoring snapshot\n");
             restoreSnapshot(guest);
+            break;
+          case ENABLE_DEBUG:
+            enableDebug(guest);
             break;
           default:
             printf("[!] Unknown ioctl command from os-handler: %d\n",
@@ -311,7 +311,7 @@ int createCPUID(struct kernelGuest *guest) {
 }
 
 int filterCPUID(struct kvm_cpuid2 *cpuid) {
-  // Remove CPUID functions that are not supported by LateRegistration
+  // Remove CPUID functions that are not supported by Tuscan-Leather
   for (unsigned int i = 0; i < cpuid->nent; i++) {
     struct kvm_cpuid_entry2 *entry = &cpuid->entries[i];
 

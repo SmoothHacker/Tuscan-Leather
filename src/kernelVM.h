@@ -1,5 +1,5 @@
-#ifndef LATEREGISTRATION_KERNELVM_H
-#define LATEREGISTRATION_KERNELVM_H
+#ifndef TUSCAN_LEATHER_KERNELVM_H
+#define TUSCAN_LEATHER_KERNELVM_H
 
 #include <asm/bootparam.h>
 #include <err.h>
@@ -41,7 +41,6 @@ struct kernelGuest {
   void *mem;
   void *initrdMemAddr;
   void *kernelMemAddr;
-  struct kvm_run *runStruct;
 };
 
 int createKernelVM(struct kernelGuest *guest);
@@ -64,4 +63,6 @@ int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
 
 int dumpVCPURegs(struct kernelGuest *guest);
 
-#endif // LATEREGISTRATION_KERNELVM_H
+int enableDebug(struct kernelGuest *guest);
+
+#endif // TUSCAN_LEATHER_KERNELVM_H
