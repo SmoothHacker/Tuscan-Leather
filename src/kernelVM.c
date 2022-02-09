@@ -3,18 +3,18 @@
 #include "../os-handler/fuzzRunner.h"
 #include "snapshot.h"
 
-int createKernelVM(struct kernelGuest *guest) {
+int createKernelVM(kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
     err(1, "[!] VM creation failed");
 
   if (!ioctl(guest->vmfd, KVM_CHECK_EXTENSION,
              KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2))
     err(1, "[!] KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 is not supported");
-
-  if (!ioctl(guest->vmfd, KVM_ENABLE_CAP, KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
-             KVM_DIRTY_LOG_INITIALLY_SET | KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE))
-    err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
-
+  /*
+    if (!ioctl(guest->vmfd, KVM_ENABLE_CAP, KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
+               KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE))
+      err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
+  */
   if (ioctl(guest->vmfd, KVM_SET_TSS_ADDR, 0xfffbd000) < 0)
     err(1, "[!] Failed to set TSS addr");
 
@@ -51,6 +51,8 @@ int createKernelVM(struct kernelGuest *guest) {
   if (guest->vcpu_fd < 0)
     err(1, "[!] Failed to create vcpu");
 
+  // Enabling dirty_log tracking
+
   initVMRegs(guest);
   createCPUID(guest);
   return 0;
@@ -63,13 +65,13 @@ int createKernelVM(struct kernelGuest *guest) {
  * linux x86 boot protocol and inform the kernel of the memory locations
  * via e820 entries.
  * */
-int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
+int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
                  const char *initrdImagePath) {
   int kernelFD = open(kernelImagePath, O_RDONLY);
   int initrdFD = open(initrdImagePath, O_RDONLY);
 
   // TODO Make this configurable at runtime
-  const char *kernelCmdline = "console=ttyS0 nokaslr root=/dev/vda";
+  const char *kernelCmdline = "quiet nokaslr root=/dev/vda";
 
   if ((kernelFD == -1) || (initrdFD == -1)) {
     err(1, "[!] Cannot open kernel image and/or initrd");
@@ -136,7 +138,7 @@ int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
   return 0;
 }
 
-int cleanupKernelVM(struct kernelGuest *guest) {
+int cleanupKernelVM(kernelGuest *guest) {
   close(guest->vcpu_fd);
   close(guest->vmfd);
   close(guest->kvm_fd);
@@ -144,7 +146,7 @@ int cleanupKernelVM(struct kernelGuest *guest) {
   return 0;
 }
 
-int enableDebug(struct kernelGuest *guest) {
+int enableDebug(kernelGuest *guest) {
   /* For some reason the alternative_instructions function in the kernel is
    * triggered cause an interrupt. Don't know a way to resolve and proceed
    */
@@ -154,14 +156,17 @@ int enableDebug(struct kernelGuest *guest) {
 
   if (ioctl(guest->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
     perror("[!] KVM_SET_GUEST_DEBUG failed");
+
+  return 0;
 }
 
 /*
  * runKernelVM
  * The main execution loop for the VM.
  * */
-int runKernelVM(struct kernelGuest *guest) {
+int runKernelVM(kernelGuest *guest) {
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
+  struct kvm_sregs *sregs;
   struct kvm_run *run =
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
 
@@ -190,7 +195,11 @@ int runKernelVM(struct kernelGuest *guest) {
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
             // printf("[*] Taking snapshot\n");
-            createSnapshot(guest);
+            // createSnapshot(guest);
+            pageTableFeatureEmumeration(guest);
+            cleanupKernelVM(guest);
+            exit(0);
+
             break;
           case RESTORE_VM:
             // printf("[*] Restoring snapshot\n");
@@ -236,7 +245,7 @@ int runKernelVM(struct kernelGuest *guest) {
  * Sets up registers for the VM.
  * Sourced from the Linux x86 boot protocol.
  * */
-int initVMRegs(struct kernelGuest *guest) {
+int initVMRegs(kernelGuest *guest) {
   struct kvm_regs regs;
   struct kvm_sregs sregs;
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
@@ -292,7 +301,7 @@ int initVMRegs(struct kernelGuest *guest) {
  * Setup the CPUID instruction for linux to recognize this harness as KVM and
  * what processor features are available to the operating system.
  * */
-int createCPUID(struct kernelGuest *guest) {
+int createCPUID(kernelGuest *guest) {
   struct kvm_cpuid2 *kvm_cpuid;
 
   kvm_cpuid = calloc(1, sizeof(*kvm_cpuid) + 100 * sizeof(*kvm_cpuid->entries));
@@ -365,7 +374,7 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
   return 0;
 }
 
-int dumpVCPURegs(struct kernelGuest *guest) {
+int dumpVCPURegs(kernelGuest *guest) {
   struct kvm_regs regs;
   if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
     err(1, "[!] Failed to get registers - dumpVCPURegs");

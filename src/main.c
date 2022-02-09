@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
   }
 
   printf("Tuscan-Leather - Linux Kernel Hypervisor\n");
-  struct kernelGuest guest;
+  kernelGuest guest;
 
   guest.kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
   if (guest.kvm_fd == -1)

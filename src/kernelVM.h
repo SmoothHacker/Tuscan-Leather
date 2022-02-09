@@ -34,35 +34,39 @@
 #define KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE (1 << 0)
 #define KVM_DIRTY_LOG_INITIALLY_SET (1 << 1)
 
-struct kernelGuest {
+typedef struct {
   int vmfd;
   int vcpu_fd;
   int kvm_fd;
   void *mem;
   void *initrdMemAddr;
   void *kernelMemAddr;
-};
+  uint64_t bitmap_size;
+  void *dirty_bitmap;
+} kernelGuest;
 
-int createKernelVM(struct kernelGuest *guest);
+int createKernelVM(kernelGuest *guest);
 
-int loadKernelVM(struct kernelGuest *guest, const char *kernelImagePath,
+int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
                  const char *initrdImagePath);
 
-int cleanupKernelVM(struct kernelGuest *guest);
+int cleanupKernelVM(kernelGuest *guest);
 
-int runKernelVM(struct kernelGuest *guest);
+int runKernelVM(kernelGuest *guest);
 
-int initVMRegs(struct kernelGuest *guest);
+int initVMRegs(kernelGuest *guest);
 
-int createCPUID(struct kernelGuest *guest);
+int createCPUID(kernelGuest *guest);
 
 int filterCPUID(struct kvm_cpuid2 *cpuid);
 
 int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
                  uint32_t type);
 
-int dumpVCPURegs(struct kernelGuest *guest);
+int dumpVCPURegs(kernelGuest *guest);
 
-int enableDebug(struct kernelGuest *guest);
+int enableDebug(kernelGuest *guest);
+
+int walkPageTables(kernelGuest *guest);
 
 #endif // TUSCAN_LEATHER_KERNELVM_H
