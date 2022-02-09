@@ -1,7 +1,9 @@
 #ifndef TUSCAN_LEATHER_SNAPSHOT_H
 #define TUSCAN_LEATHER_SNAPSHOT_H
 
+#include <errno.h>
 #include <linux/kvm.h>
+
 #include "kernelVM.h"
 
 struct snapshot {
@@ -13,7 +15,9 @@ struct snapshot {
 
 extern struct snapshot *snapshot;
 
-int restoreSnapshot(struct kernelGuest *guest);
-int createSnapshot(struct kernelGuest *guest);
+int restoreSnapshot(kernelGuest *guest);
+int createSnapshot(kernelGuest *guest);
+int dumpPageTable(kernelGuest *guest, uint64_t cr3_addr);
+int pageTableFeatureEmumeration(kernelGuest *guest);
 
 #endif // TUSCAN_LEATHER_SNAPSHOT_H
