@@ -41,8 +41,7 @@ typedef struct {
   void *mem;
   void *initrdMemAddr;
   void *kernelMemAddr;
-  uint64_t bitmap_size;
-  void *dirty_bitmap;
+  uint64_t *dirty_bitmap;
 } kernelGuest;
 
 int createKernelVM(kernelGuest *guest);
@@ -66,7 +65,5 @@ int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
 int dumpVCPURegs(kernelGuest *guest);
 
 int enableDebug(kernelGuest *guest);
-
-int walkPageTables(kernelGuest *guest);
 
 #endif // TUSCAN_LEATHER_KERNELVM_H

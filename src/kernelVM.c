@@ -7,14 +7,15 @@ int createKernelVM(kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
     err(1, "[!] VM creation failed");
 
-  if (!ioctl(guest->vmfd, KVM_CHECK_EXTENSION,
-             KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2))
+  if (ioctl(guest->kvm_fd, KVM_CHECK_EXTENSION,
+            KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2) < 0)
     err(1, "[!] KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 is not supported");
-  /*
-    if (!ioctl(guest->vmfd, KVM_ENABLE_CAP, KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
-               KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE))
-      err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
-  */
+
+  struct kvm_enable_cap cap = {.cap = KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
+                               .args = KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE};
+  if (ioctl(guest->vmfd, KVM_ENABLE_CAP, &cap) < 0)
+    err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
+
   if (ioctl(guest->vmfd, KVM_SET_TSS_ADDR, 0xfffbd000) < 0)
     err(1, "[!] Failed to set TSS addr");
 
@@ -52,6 +53,7 @@ int createKernelVM(kernelGuest *guest) {
     err(1, "[!] Failed to create vcpu");
 
   // Enabling dirty_log tracking
+  guest->dirty_bitmap = malloc(0x40000); // Tracking for 1GB vm memory
 
   initVMRegs(guest);
   createCPUID(guest);
@@ -61,7 +63,7 @@ int createKernelVM(kernelGuest *guest) {
 /*
  * loadKernelVM
  * Opens bzImage and initrd and reads them into their proper memory locations.
- * This is also where we setup the boot parameters in accordance with the
+ * This is also where we set up the boot parameters in accordance with the
  * linux x86 boot protocol and inform the kernel of the memory locations
  * via e820 entries.
  * */
@@ -71,7 +73,7 @@ int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
   int initrdFD = open(initrdImagePath, O_RDONLY);
 
   // TODO Make this configurable at runtime
-  const char *kernelCmdline = "quiet nokaslr root=/dev/vda";
+  const char *kernelCmdline = "nokaslr root=/dev/vda";
 
   if ((kernelFD == -1) || (initrdFD == -1)) {
     err(1, "[!] Cannot open kernel image and/or initrd");
@@ -142,6 +144,7 @@ int cleanupKernelVM(kernelGuest *guest) {
   close(guest->vcpu_fd);
   close(guest->vmfd);
   close(guest->kvm_fd);
+  free(guest->dirty_bitmap);
   munmap(guest->mem, 1 << 30);
   return 0;
 }
@@ -166,7 +169,6 @@ int enableDebug(kernelGuest *guest) {
  * */
 int runKernelVM(kernelGuest *guest) {
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
-  struct kvm_sregs *sregs;
   struct kvm_run *run =
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
 
@@ -194,15 +196,11 @@ int runKernelVM(kernelGuest *guest) {
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
-            // printf("[*] Taking snapshot\n");
-            // createSnapshot(guest);
-            pageTableFeatureEmumeration(guest);
-            cleanupKernelVM(guest);
-            exit(0);
-
+            printf("[*] Taking snapshot\n");
+            createSnapshot(guest);
             break;
           case RESTORE_VM:
-            // printf("[*] Restoring snapshot\n");
+            printf("[*] Restoring snapshot\n");
             restoreSnapshot(guest);
             break;
           case ENABLE_DEBUG:
@@ -224,7 +222,7 @@ int runKernelVM(kernelGuest *guest) {
       dumpVCPURegs(guest);
       exit(-1);
     case KVM_EXIT_FAIL_ENTRY:
-      err(1, "[!] FAIL_ENTRY: hw entry failure reason: 0x%llx\n",
+      err(1, "[!] FAIL_ENTRY: hw bits failure reason: 0x%llx\n",
           run->fail_entry.hardware_entry_failure_reason);
     case KVM_EXIT_SHUTDOWN:
       printf("[!] Shutdown Received\n");
@@ -298,7 +296,7 @@ int initVMRegs(kernelGuest *guest) {
 
 /*
  * createCPUID
- * Setup the CPUID instruction for linux to recognize this harness as KVM and
+ * Set up the CPUID instruction for linux to recognize this harness as KVM and
  * what processor features are available to the operating system.
  * */
 int createCPUID(kernelGuest *guest) {
