@@ -14,17 +14,13 @@ int restoreSnapshot(kernelGuest *guest) {
   gettimeofday(&start, NULL);
 
   if (ioctl(guest->vcpu_fd, KVM_SET_SREGS, &snapshot->sregs) < 0)
-    err(1, "[!] Failed to set special registers - snapshot");
+    err(-1, "[!] Failed to set special registers - snapshot");
 
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
-    err(1, "[!] Failed to set registers - snapshot");
+    err(-1, "[!] Failed to set registers - snapshot");
 
   memcpy(guest->mem, snapshot->mem, MEM_SIZE);
-
-  gettimeofday(&stop, NULL);
-  secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 +
-         (double)(stop.tv_sec - start.tv_sec);
-  printf("[*] Restore - time taken %f\n", secs);
+  printf("[*] Snapshot Restored");
   return 0;
 }
 
@@ -57,13 +53,17 @@ int createSnapshot(kernelGuest *guest) {
   return 0;
 }
 
-int pageTableFeatureEmumeration(kernelGuest *guest) {
+uint64_t alignGuestAddr(uint64_t guestAddr) { return guestAddr & ~0xfff; }
+
+int pageTableFeatureEnumeration(kernelGuest *guest) {
   struct kvm_sregs *sregs = malloc(sizeof(struct kvm_sregs));
   struct kvm_msrs *msrs =
       malloc(sizeof(struct kvm_msrs) + sizeof(struct kvm_msr_entry));
 
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, sregs) < 0)
     err(-1, "[!] Cannot get sregs\n");
+
+  printf("cr3 0x%llx\n", sregs->cr3);
 
   // Can grab valid list of known MSRS to retrieve via KVM_GET_MSRS
   msrs->nmsrs = 1;
@@ -97,5 +97,32 @@ int pageTableFeatureEmumeration(kernelGuest *guest) {
   }
   free(sregs);
   free(msrs);
+  return 0;
+}
+
+int iteratePageTables(kernelGuest *guest, uint64_t cr3_addr) {
+  // 4 Level Paging is only supported. Assumption of 46 physical bits and 48
+  // virtual bits
+  uint64_t pml4eAddr = (cr3_addr & 0xffffffffff000) >> 12;
+  uint64_t *pml4e_table = (uint64_t *)(((uint64_t *)guest->mem) + pml4eAddr);
+
+  int numOfPML4Es = 0;
+  int writeablePages = 0;
+  for (int i = 0; i < MAX_PML4_ENTRIES; i++) {
+    union pml4_entry entry;
+    entry.bitmap = pml4e_table[i];
+
+    if (entry.bits.present)
+      numOfPML4Es++;
+    else
+      break;
+
+    if (entry.bits.readWrite)
+      writeablePages++;
+  }
+
+  printf("[*] %d PML4Es\n[*] %d Writeable Pages\n", numOfPML4Es,
+         writeablePages);
+
   return 0;
 }
