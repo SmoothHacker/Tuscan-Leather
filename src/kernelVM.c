@@ -53,7 +53,7 @@ int createKernelVM(kernelGuest *guest) {
     err(1, "[!] Failed to create vcpu");
 
   // Enabling dirty_log tracking
-  guest->dirty_bitmap = malloc(0x40000); // Tracking for 1GB vm memory
+  guest->dirty_bitmap = malloc(BITMAP_SIZE_BITS); // Tracking for 1GB vm memory
 
   initVMRegs(guest);
   createCPUID(guest);
@@ -73,7 +73,7 @@ int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
   int initrdFD = open(initrdImagePath, O_RDONLY);
 
   // TODO Make this configurable at runtime
-  const char *kernelCmdline = "nokaslr root=/dev/vda";
+  const char *kernelCmdline = "nokaslr quiet console=ttyS0 root=/dev/vda";
 
   if ((kernelFD == -1) || (initrdFD == -1)) {
     err(1, "[!] Cannot open kernel image and/or initrd");

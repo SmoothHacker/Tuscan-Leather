@@ -2,15 +2,6 @@
 
 struct snapshot *snapshot;
 
-uint64_t countSetBits(uint64_t n) {
-  uint64_t count = 0;
-  while (n) {
-    n &= (n - 1);
-    count++;
-  }
-  return count;
-}
-
 /*
  * restoreSnapshot
  * restores a prior saved snapshot of the vm to reset the kernel environment.
@@ -30,9 +21,31 @@ int restoreSnapshot(kernelGuest *guest) {
 
   // Walk Dirty Bitmap
   uint64_t numOfPages = 0;
-  for (int i = 0; i < 0x1000; i += 2) {
-    if (guest->dirty_bitmap[i] != 0) {
-      numOfPages += countSetBits(guest->dirty_bitmap[i]);
+
+  // Walk bitmap and queue dirty pages for restoration
+  const uint64_t NumberBits = 64;
+  for (uint64_t QwordIdx = 0; QwordIdx < BITMAP_SIZE_QWORDS; QwordIdx++) {
+    const uint64_t DirtyQword = guest->dirty_bitmap[QwordIdx];
+    if (DirtyQword == 0) {
+      continue;
+    }
+
+    for (uint64_t BitIdx = 0; BitIdx < NumberBits; BitIdx++) {
+      const uint8_t DirtyBit = (DirtyQword >> BitIdx) & 1;
+      if (DirtyBit == 0) {
+        continue;
+      }
+      numOfPages++;
+      const uint64_t DirtyPageIdx = (QwordIdx * NumberBits) + BitIdx;
+      const uint64_t guestPhysAddr = DirtyPageIdx * PAGE_SIZE;
+
+      // memcpy to restore page
+      uint8_t *guestVirtAddr = ((uint8_t *)guest->mem) + guestPhysAddr;
+      // Align guestVirtAddr
+      // guestVirtAddr = (void *)guestVirtAddr & ~0xfff;
+
+      uint8_t *snapshotVirtAddr = (((uint8_t *)guest->mem) + guestPhysAddr);
+      memcpy(guestVirtAddr, snapshotVirtAddr, 0x1000);
     }
   }
 
@@ -56,10 +69,18 @@ int restoreSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
     err(-1, "[!] Failed to set registers - restore");
 
-  memcpy(guest->mem, snapshot->mem, MEM_SIZE);
   gettimeofday(&end, 0);
-  printf("[*] Snapshot Restored - Micro Seconds: %ld\n",
+  printf("[*] Snapshot Restored - Microseconds: %ld\n",
          end.tv_usec - start.tv_usec);
+
+  // Check restore integrity
+  int ret;
+  if ((ret = memcmp(guest->mem, snapshot->mem, MEM_SIZE)) != 0) {
+    printf("Snapshot failed to restore - Bytes off %d\n", ret);
+    exit(-1);
+  } else {
+    printf("Snapshot restore successful\n");
+  }
   return 0;
 }
 

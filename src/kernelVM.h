@@ -17,6 +17,10 @@
 #include <sys/uio.h>
 
 #define MEM_SIZE 1 << 30
+#define BITMAP_SIZE_QWORDS 0x1000
+#define BITMAP_SIZE_BITS 0x40000
+#define PAGE_SIZE 0x1000
+
 #define BOOT_PARAM_ADDR 0x10000
 #define CMDLINE_ADDR 0x20000
 #define KERNEL_ADDR 0x100000
