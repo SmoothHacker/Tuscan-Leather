@@ -40,16 +40,12 @@ int restoreSnapshot(kernelGuest *guest) {
       const uint64_t guestPhysAddr = DirtyPageIdx * PAGE_SIZE;
 
       // memcpy to restore page
-      uint8_t *guestVirtAddr = ((uint8_t *)guest->mem) + guestPhysAddr;
-      // Align guestVirtAddr
-      // guestVirtAddr = (void *)guestVirtAddr & ~0xfff;
+      void *guestVirtAddr = ((void *)guest->mem) + guestPhysAddr;
+      void *snapshotVirtAddr = ((void *)snapshot->mem) + guestPhysAddr;
 
-      uint8_t *snapshotVirtAddr = (((uint8_t *)guest->mem) + guestPhysAddr);
-      memcpy(guestVirtAddr, snapshotVirtAddr, 0x1000);
+      memcpy(guestVirtAddr, snapshotVirtAddr, PAGE_SIZE);
     }
   }
-
-  printf("[*] %lu 4k pages need to be reset\n", numOfPages);
 
   // Clear Dirty Log
   struct kvm_clear_dirty_log ClearDirtyLog = {
@@ -70,17 +66,9 @@ int restoreSnapshot(kernelGuest *guest) {
     err(-1, "[!] Failed to set registers - restore");
 
   gettimeofday(&end, 0);
-  printf("[*] Snapshot Restored - Microseconds: %ld\n",
-         end.tv_usec - start.tv_usec);
+  printf("[*] Snapshot Restored - Microseconds: %ld - NumOfPagesDirtied: %ld\n",
+         end.tv_usec - start.tv_usec, numOfPages);
 
-  // Check restore integrity
-  int ret;
-  if ((ret = memcmp(guest->mem, snapshot->mem, MEM_SIZE)) != 0) {
-    printf("Snapshot failed to restore - Bytes off %d\n", ret);
-    exit(-1);
-  } else {
-    printf("Snapshot restore successful\n");
-  }
   return 0;
 }
 
@@ -126,4 +114,3 @@ int createSnapshot(kernelGuest *guest) {
   return 0;
 }
 
-uint64_t alignGuestAddr(uint64_t guestAddr) { return guestAddr & ~0xfff; }

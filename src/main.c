@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  printf("Tuscan-Leather - Linux Kernel Hypervisor\n");
+  printf("Tuscan-Leather - Linux Kernel Fuzzer\n");
   kernelGuest guest;
 
   guest.kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);

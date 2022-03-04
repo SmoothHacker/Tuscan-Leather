@@ -200,7 +200,7 @@ int runKernelVM(kernelGuest *guest) {
             createSnapshot(guest);
             break;
           case RESTORE_VM:
-            printf("[*] Restoring snapshot\n");
+            // printf("[*] Restoring snapshot\n");
             restoreSnapshot(guest);
             break;
           case ENABLE_DEBUG:
