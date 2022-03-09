@@ -200,15 +200,13 @@ int runKernelVM(kernelGuest *guest) {
             createSnapshot(guest);
             break;
           case RESTORE_VM:
-            // printf("[*] Restoring snapshot\n");
             restoreSnapshot(guest);
             break;
           case ENABLE_DEBUG:
             enableDebug(guest);
             break;
           default:
-            printf("[!] Unknown ioctl command from os-handler: %d\n",
-                   *ioctl_cmd);
+            printf("[!] Unknown ioctl command: %d\n", *ioctl_cmd);
             break;
           }
         }

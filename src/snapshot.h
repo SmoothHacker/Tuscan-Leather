@@ -7,6 +7,8 @@
 
 #include "kernelVM.h"
 
+#define NUMBER_OF_BITS 64
+
 struct snapshot {
   void *mem;
   struct kvm_regs regs;
