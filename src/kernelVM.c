@@ -73,7 +73,7 @@ int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
   int initrdFD = open(initrdImagePath, O_RDONLY);
 
   // TODO Make this configurable at runtime
-  const char *kernelCmdline = "nokaslr quiet console=ttyS0 root=/dev/vda";
+  const char *kernelCmdline = "nokaslr quiet root=/dev/vda";
 
   if ((kernelFD == -1) || (initrdFD == -1)) {
     err(1, "[!] Cannot open kernel image and/or initrd");
@@ -173,10 +173,13 @@ int runKernelVM(kernelGuest *guest) {
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
 
   for (;;) {
+    uint64_t start = __rdtsc();
     int ret = ioctl(guest->vcpu_fd, KVM_RUN, 0);
     if (ret < 0) {
       err(1, "kvm_run failed");
     }
+
+    guest->stats->cycles_run += __rdtsc() - start;
 
     switch (run->exit_reason) {
     case KVM_EXIT_IO: // TODO: Add system for ttys to be sent to stdout.
@@ -198,6 +201,8 @@ int runKernelVM(kernelGuest *guest) {
           case TAKE_SNAPSHOT:
             printf("[*] Taking snapshot\n");
             createSnapshot(guest);
+            pthread_cond_signal(&cond);
+            pthread_mutex_unlock(&mutex);
             break;
           case RESTORE_VM:
             restoreSnapshot(guest);

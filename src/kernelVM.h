@@ -15,6 +15,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/uio.h>
+#include <pthread.h>
+#include <x86intrin.h>
 
 #define MEM_SIZE 1 << 30
 #define BITMAP_SIZE_QWORDS 0x1000
@@ -36,7 +38,16 @@
 
 // KVM Constants - not supported in kernel 5.4
 #define KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE (1 << 0)
-#define KVM_DIRTY_LOG_INITIALLY_SET (1 << 1)
+
+extern pthread_mutex_t mutex;
+extern pthread_cond_t cond;
+extern pthread_mutex_t cyc_reset_mutex;
+
+typedef struct {
+  uint64_t cycles_run;
+  uint64_t cycles_reset;
+  uint64_t cycles_vmexit;
+} statistics;
 
 typedef struct {
   int vmfd;
@@ -46,28 +57,20 @@ typedef struct {
   void *initrdMemAddr;
   void *kernelMemAddr;
   uint64_t *dirty_bitmap;
+  statistics *stats;
 } kernelGuest;
 
 int createKernelVM(kernelGuest *guest);
-
 int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
                  const char *initrdImagePath);
-
 int cleanupKernelVM(kernelGuest *guest);
-
 int runKernelVM(kernelGuest *guest);
-
 int initVMRegs(kernelGuest *guest);
-
 int createCPUID(kernelGuest *guest);
-
 int filterCPUID(struct kvm_cpuid2 *cpuid);
-
 int addE820Entry(struct boot_params *boot, uint64_t addr, uint64_t size,
                  uint32_t type);
-
 int dumpVCPURegs(kernelGuest *guest);
-
 int enableDebug(kernelGuest *guest);
 
 #endif // TUSCAN_LEATHER_KERNELVM_H

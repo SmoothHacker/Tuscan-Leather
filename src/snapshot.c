@@ -7,9 +7,7 @@ struct snapshot *snapshot;
  * restores a prior saved snapshot of the vm to reset the kernel environment.
  * */
 int restoreSnapshot(kernelGuest *guest) {
-  struct timeval start, end;
-
-  gettimeofday(&start, 0);
+  uint64_t start = __rdtsc();
 
   if (ioctl(guest->vcpu_fd, KVM_KVMCLOCK_CTRL) < 0)
     err(-1, "[!] Unable to set KVMCLOCK_CTRL");
@@ -67,9 +65,9 @@ int restoreSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
     err(-1, "[!] Failed to set registers - restore");
 
-  gettimeofday(&end, 0);
-  // printf("[*] Snapshot Restored - Microseconds: %ld - NumOfPagesDirtied:
-  // %ld\n", end.tv_usec - start.tv_usec, numOfPages);
+  pthread_mutex_lock(&cyc_reset_mutex);
+  guest->stats->cycles_reset += __rdtsc() - start;
+  pthread_mutex_unlock(&cyc_reset_mutex);
 
   return 0;
 }
