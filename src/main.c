@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
   stats->cycles_reset = 0;
   stats->cycles_run = 0;
   stats->cycles_vmexit = 0;
+  stats->last_report = 0;
 
   kernelGuest *guest = malloc(sizeof(kernelGuest));
   guest->stats = stats;

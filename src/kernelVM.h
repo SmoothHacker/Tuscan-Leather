@@ -47,6 +47,7 @@ typedef struct {
   uint64_t cycles_run;
   uint64_t cycles_reset;
   uint64_t cycles_vmexit;
+  uint64_t last_report;
 } statistics;
 
 typedef struct {

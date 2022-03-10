@@ -2,6 +2,13 @@
 
 struct snapshot *snapshot;
 
+int updateStats(kernelGuest *guest, uint64_t start) {
+  pthread_mutex_lock(&cyc_reset_mutex);
+  guest->stats->cycles_reset += __rdtsc() - start;
+  pthread_mutex_unlock(&cyc_reset_mutex);
+  return 0;
+}
+
 /*
  * restoreSnapshot
  * restores a prior saved snapshot of the vm to reset the kernel environment.
@@ -65,9 +72,10 @@ int restoreSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
     err(-1, "[!] Failed to set registers - restore");
 
-  pthread_mutex_lock(&cyc_reset_mutex);
-  guest->stats->cycles_reset += __rdtsc() - start;
-  pthread_mutex_unlock(&cyc_reset_mutex);
+  if ((__rdtsc() - guest->stats->last_report) > 10000000) {
+    updateStats(guest, start);
+    guest->stats->last_report = __rdtsc();
+  }
 
   return 0;
 }
