@@ -17,7 +17,6 @@ struct snapshot {
 
 extern struct snapshot *snapshot;
 
-int updateStats(kernelGuest *guest, uint64_t start);
 int restoreSnapshot(kernelGuest *guest);
 int createSnapshot(kernelGuest *guest);
 

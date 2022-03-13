@@ -3,6 +3,9 @@
 #include "../os-handler/fuzzRunner.h"
 #include "snapshot.h"
 
+statistics local_stats;
+uint64_t last_report;
+
 int createKernelVM(kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
     err(1, "[!] VM creation failed");
@@ -163,23 +166,53 @@ int enableDebug(kernelGuest *guest) {
   return 0;
 }
 
+int updateStats(kernelGuest *guest) {
+  // printf("Cases: %lu\n", local_stats.cases);
+  pthread_mutex_lock(guest->stats->lock);
+  guest->stats->cycles_reset += local_stats.cycles_reset;
+  // guest->stats->cycles_vmexit += local_stats.cycles_vmexit;
+  guest->stats->cycles_run += local_stats.cycles_run;
+  guest->stats->cases += local_stats.cases;
+
+  pthread_mutex_unlock(guest->stats->lock);
+
+  local_stats.cycles_reset = 0;
+  // local_stats.cycles_vmexit = 0;
+  local_stats.cycles_run = 0;
+  local_stats.cases = 0;
+
+  last_report = __rdtsc();
+  return 0;
+}
+
 /*
  * runKernelVM
  * The main execution loop for the VM.
  * */
 int runKernelVM(kernelGuest *guest) {
+  local_stats.cycles_reset = 0;
+  local_stats.cycles_run = 0;
+  local_stats.cases = 0;
+  last_report = 0;
+
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
   struct kvm_run *run =
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
 
   for (;;) {
-    uint64_t start = __rdtsc();
+    uint64_t start_cyc_run = __rdtsc();
     int ret = ioctl(guest->vcpu_fd, KVM_RUN, 0);
     if (ret < 0) {
       err(1, "kvm_run failed");
     }
+    local_stats.cases += 1;
+    local_stats.cycles_run += __rdtsc() - start_cyc_run;
 
-    guest->stats->cycles_run += __rdtsc() - start;
+    // Check if we can report stats to main thread
+    // On a 2.1 Ghz processor this is 105 reports a second.
+    if (__rdtsc() - last_report > 20000000) {
+      updateStats(guest);
+    }
 
     switch (run->exit_reason) {
     case KVM_EXIT_IO: // TODO: Add system for ttys to be sent to stdout.
@@ -196,16 +229,19 @@ int runKernelVM(kernelGuest *guest) {
       case 0xdead: // Port Reserved by os-handler kernel module
         if (run->io.direction == KVM_EXIT_IO_OUT) {
           uint8_t *ioctl_cmd = (uint8_t *)run + run->io.data_offset;
+          uint64_t start_reset = 0;
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
             printf("[*] Taking snapshot\n");
             createSnapshot(guest);
             pthread_cond_signal(&cond);
-            pthread_mutex_unlock(&mutex);
+            // pthread_mutex_unlock(&mutex);
             break;
           case RESTORE_VM:
+            start_reset = __rdtsc();
             restoreSnapshot(guest);
+            local_stats.cycles_reset += __rdtsc() - start_reset;
             break;
           case ENABLE_DEBUG:
             enableDebug(guest);

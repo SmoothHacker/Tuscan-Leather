@@ -10,7 +10,6 @@
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t cyc_reset_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct worker_args {
   char *kernel_img_path;
@@ -58,7 +57,10 @@ int main(int argc, char **argv) {
   stats->cycles_reset = 0;
   stats->cycles_run = 0;
   stats->cycles_vmexit = 0;
-  stats->last_report = 0;
+  stats->cases = 0;
+
+  stats->lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+  pthread_mutex_init(stats->lock, NULL);
 
   kernelGuest *guest = malloc(sizeof(kernelGuest));
   guest->stats = stats;
@@ -94,14 +96,18 @@ int main(int argc, char **argv) {
     clock_t elapsed = clock() - start;
     double duration = ((double)elapsed) / CLOCKS_PER_SEC;
 
-    pthread_mutex_lock(&cyc_reset_mutex);
+    pthread_mutex_lock(stats->lock);
     uint64_t crst = stats->cycles_reset;
     uint64_t crun = stats->cycles_run;
-    pthread_mutex_unlock(&cyc_reset_mutex);
+    uint64_t cases = stats->cases;
+    pthread_mutex_unlock(stats->lock);
 
     uint64_t ctot = crst + crun;
     double prst = (double)crst / (double)ctot;
     double prun = (double)crun / (double)ctot;
-    printf("[%f] reset %f | run %f\n", duration, prst, prun);
+    double cps = (double)cases / duration;
+    printf("[%f] cps %f | reset %f | run %f | cases %lu\n", duration, cps, prst,
+           prun, cases);
+    // printf("%f %f %f %lu\n", duration, prst, prun, cases);
   }
 }

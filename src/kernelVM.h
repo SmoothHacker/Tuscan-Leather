@@ -41,13 +41,13 @@
 
 extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
-extern pthread_mutex_t cyc_reset_mutex;
 
 typedef struct {
   uint64_t cycles_run;
   uint64_t cycles_reset;
   uint64_t cycles_vmexit;
-  uint64_t last_report;
+  uint64_t cases;
+  pthread_mutex_t *lock;
 } statistics;
 
 typedef struct {
