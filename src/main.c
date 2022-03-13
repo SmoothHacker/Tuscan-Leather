@@ -1,5 +1,3 @@
-#include <err.h>
-#include <fcntl.h>
 #include <linux/kvm.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -20,14 +18,14 @@ struct worker_args {
 void worker(struct worker_args *args) {
   args->guest->kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
   if (args->guest->kvm_fd == -1)
-    err(1, "/dev/kvm");
+    ERR("/dev/kvm");
 
   // Make sure we have the stable version of the API
   int ret = ioctl(args->guest->kvm_fd, KVM_GET_API_VERSION, NULL);
   if (ret == -1)
-    err(1, "KVM_GET_API_VERSION");
+    ERR("KVM_GET_API_VERSION");
   if (ret != 12)
-    errx(1, "KVM_GET_API_VERSION %d, expected 12", ret);
+    errx(-1, "[!] KVM_GET_API_VERSION %d, expected 12", ret);
 
   createKernelVM(args->guest);
   printf("[*] Created KernelVM\n");
@@ -76,7 +74,7 @@ int main(int argc, char **argv) {
   int ret =
       pthread_create(&worker_thread_id, NULL, (void *(*)(void *))worker, &args);
   if (ret) {
-    err(-1, "[!] Failed to create thread!\n");
+    ERR("[!] Failed to create thread!\n");
   }
 
   while (1) {

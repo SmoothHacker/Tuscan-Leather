@@ -8,36 +8,36 @@ uint64_t last_report;
 
 int createKernelVM(kernelGuest *guest) {
   if ((guest->vmfd = ioctl(guest->kvm_fd, KVM_CREATE_VM, 0)) < 0)
-    err(1, "[!] VM creation failed");
+    ERR("VM creation failed");
 
   if (ioctl(guest->kvm_fd, KVM_CHECK_EXTENSION,
             KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2) < 0)
-    err(1, "[!] KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 is not supported");
+    ERR("KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 is not supported");
 
   struct kvm_enable_cap cap = {.cap = KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
                                .args = KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE};
   if (ioctl(guest->vmfd, KVM_ENABLE_CAP, &cap) < 0)
-    err(1, "[!] Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
+    ERR("Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
 
   if (ioctl(guest->vmfd, KVM_SET_TSS_ADDR, 0xfffbd000) < 0)
-    err(1, "[!] Failed to set TSS addr");
+    ERR("Failed to set TSS addr");
 
   uint64_t map_addr = 0xffffc000;
   if (ioctl(guest->vmfd, KVM_SET_IDENTITY_MAP_ADDR, &map_addr) < 0)
-    err(1, "[!] Failed to set identity map addr");
+    ERR("Failed to set identity map addr");
 
   if (ioctl(guest->vmfd, KVM_CREATE_IRQCHIP, 0) < 0)
-    err(1, "[!] Failed to create irq chip");
+    ERR("Failed to create irq chip");
 
   struct kvm_pit_config pit = {.flags = 0};
   if (ioctl(guest->vmfd, KVM_CREATE_PIT2, &pit) < 0)
-    err(1, "[!] Failed to create i8254 interval timer");
+    ERR("Failed to create i8254 interval timer");
 
   guest->mem = mmap(NULL, MEM_SIZE, PROT_READ | PROT_WRITE,
                     MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
 
   if (!guest->mem)
-    err(1, "[!] Failed to mmap VM memory");
+    ERR("Failed to mmap VM memory");
 
   madvise(guest->mem, MEM_SIZE, MADV_MERGEABLE);
 
@@ -49,11 +49,11 @@ int createKernelVM(kernelGuest *guest) {
                                                    (uint64_t)guest->mem};
 
   if (ioctl(guest->vmfd, KVM_SET_USER_MEMORY_REGION, &region) < 0)
-    err(1, "[!] Failed to set user memory region");
+    ERR("Failed to set user memory region");
 
   guest->vcpu_fd = ioctl(guest->vmfd, KVM_CREATE_VCPU, 0);
   if (guest->vcpu_fd < 0)
-    err(1, "[!] Failed to create vcpu");
+    ERR("Failed to create vcpu");
 
   // Enabling dirty_log tracking
   guest->dirty_bitmap = malloc(BITMAP_SIZE_BITS); // Tracking for 1GB vm memory
@@ -79,7 +79,7 @@ int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
   const char *kernelCmdline = "nokaslr quiet root=/dev/vda";
 
   if ((kernelFD == -1) || (initrdFD == -1)) {
-    err(1, "[!] Cannot open kernel image and/or initrd");
+    ERR("Cannot open kernel image and/or initrd");
   }
 
   struct stat st;
@@ -161,23 +161,20 @@ int enableDebug(kernelGuest *guest) {
   };
 
   if (ioctl(guest->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
-    perror("[!] KVM_SET_GUEST_DEBUG failed");
+    ERR("KVM_SET_GUEST_DEBUG failed");
 
   return 0;
 }
 
 int updateStats(kernelGuest *guest) {
-  // printf("Cases: %lu\n", local_stats.cases);
   pthread_mutex_lock(guest->stats->lock);
   guest->stats->cycles_reset += local_stats.cycles_reset;
-  // guest->stats->cycles_vmexit += local_stats.cycles_vmexit;
   guest->stats->cycles_run += local_stats.cycles_run;
   guest->stats->cases += local_stats.cases;
 
   pthread_mutex_unlock(guest->stats->lock);
 
   local_stats.cycles_reset = 0;
-  // local_stats.cycles_vmexit = 0;
   local_stats.cycles_run = 0;
   local_stats.cases = 0;
 
@@ -286,7 +283,7 @@ int initVMRegs(kernelGuest *guest) {
   struct kvm_regs regs;
   struct kvm_sregs sregs;
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
-    err(1, "[!] Failed to get special registers");
+    ERR("Failed to get special registers");
 
   sregs.cs.base = 0;
   sregs.cs.limit = ~0;
@@ -317,10 +314,10 @@ int initVMRegs(kernelGuest *guest) {
   sregs.cr0 |= 1; // enable protected mode
 
   if (ioctl(guest->vcpu_fd, KVM_SET_SREGS, &sregs) < 0)
-    err(1, "[!] Failed to set special registers");
+    ERR("Failed to set special registers");
 
   if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
-    err(1, "[!] Failed to get registers");
+    ERR("Failed to get registers");
 
   regs = (struct kvm_regs){
       .rflags = 2,
@@ -329,7 +326,7 @@ int initVMRegs(kernelGuest *guest) {
   };
 
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &regs) < 0)
-    err(1, "[!] Failed to set registers");
+    ERR("Failed to set registers");
   return 0;
 }
 
@@ -345,12 +342,12 @@ int createCPUID(kernelGuest *guest) {
 
   kvm_cpuid->nent = 100;
   if (ioctl(guest->kvm_fd, KVM_GET_SUPPORTED_CPUID, kvm_cpuid) < 0)
-    err(1, "[!] KVM_GET_SUPPORTED_CPUID failed");
+    ERR("KVM_GET_SUPPORTED_CPUID failed");
 
   filterCPUID(kvm_cpuid);
 
   if (ioctl(guest->vcpu_fd, KVM_SET_CPUID2, kvm_cpuid) < 0)
-    err(1, "[!] KVM_SET_CPUID2 failed");
+    ERR("KVM_SET_CPUID2 failed");
 
   free(kvm_cpuid);
   return 0;
@@ -414,7 +411,7 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
 int dumpVCPURegs(kernelGuest *guest) {
   struct kvm_regs regs;
   if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
-    err(1, "[!] Failed to get registers - dumpVCPURegs");
+    ERR("Failed to get registers - dumpVCPURegs");
 
   printf("[*] Register Dump\n");
   printf("[*] rax: 0x%016llx\n", regs.rax);

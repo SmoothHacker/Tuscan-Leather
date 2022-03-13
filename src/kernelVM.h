@@ -39,6 +39,8 @@
 // KVM Constants - not supported in kernel 5.4
 #define KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE (1 << 0)
 
+#define ERR(s) err(-1, "[!] " s)
+
 extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
 

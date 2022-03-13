@@ -8,7 +8,7 @@ struct snapshot *snapshot;
  * */
 int restoreSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_KVMCLOCK_CTRL) < 0)
-    err(-1, "[!] Unable to set KVMCLOCK_CTRL");
+    ERR("Unable to set KVMCLOCK_CTRL");
 
   // Fetch Dirty Log
   struct kvm_dirty_log dirty_log = {
@@ -17,7 +17,7 @@ int restoreSnapshot(kernelGuest *guest) {
   };
 
   if (ioctl(guest->vmfd, KVM_GET_DIRTY_LOG, &dirty_log) < 0)
-    err(-1, "[!] Failed to get Dirty Log");
+    ERR("Failed to get Dirty Log");
 
   // Walk bitmap and queue dirty pages for restoration
   for (uint64_t QwordIdx = 0; QwordIdx < BITMAP_SIZE_QWORDS; QwordIdx++) {
@@ -52,14 +52,13 @@ int restoreSnapshot(kernelGuest *guest) {
   };
 
   if (ioctl(guest->vmfd, KVM_CLEAR_DIRTY_LOG, &ClearDirtyLog) < 0)
-    err(-1, "[!] Failed to clear the dirty log - restore");
+    ERR("Failed to clear the dirty log - restore");
 
   if (ioctl(guest->vcpu_fd, KVM_SET_SREGS, &snapshot->sregs) < 0)
-    err(-1, "[!] Failed to set special registers - restore");
+    ERR("Failed to set special registers - restore");
 
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
-    err(-1, "[!] Failed to set registers - restore");
-
+    ERR("Failed to set registers - restore");
 
   return 0;
 }
@@ -70,16 +69,16 @@ int restoreSnapshot(kernelGuest *guest) {
  * */
 int createSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_KVMCLOCK_CTRL) < 0)
-    err(-1, "[!] Unable to set KVMCLOCK_CTRL");
+    ERR("Unable to set KVMCLOCK_CTRL");
 
   snapshot = malloc(sizeof(struct snapshot));
   memset(snapshot, 0x0, sizeof(struct snapshot));
 
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &snapshot->sregs) < 0)
-    err(1, "[!] Failed to get special registers");
+    ERR("Failed to get special registers");
 
   if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &snapshot->regs) < 0)
-    err(1, "[!] Failed to get registers");
+    ERR("Failed to get registers");
 
   snapshot->regs.rip += 1; // needed to go past out instruction in ioctl handler
   snapshot->mem = malloc(MEM_SIZE); // Allocate VM memory
@@ -91,7 +90,7 @@ int createSnapshot(kernelGuest *guest) {
       .dirty_bitmap = guest->dirty_bitmap,
   };
   if (ioctl(guest->vmfd, KVM_GET_DIRTY_LOG, &dirty_log) < 0)
-    err(-1, "[!] Failed to get Dirty Log");
+    ERR("Failed to get Dirty Log");
 
   // Clear Dirty Log
   struct kvm_clear_dirty_log ClearDirtyLog = {
@@ -102,7 +101,7 @@ int createSnapshot(kernelGuest *guest) {
   };
 
   if (ioctl(guest->vmfd, KVM_CLEAR_DIRTY_LOG, &ClearDirtyLog) < 0) {
-    perror("KVM_CLEAR_DIRTY_LOG");
+    ERR("KVM_CLEAR_DIRTY_LOG");
   }
 
   printf("[*] Snapshot Taken\n");
