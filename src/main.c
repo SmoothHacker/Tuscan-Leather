@@ -77,6 +77,9 @@ int main(int argc, char **argv) {
     ERR("[!] Failed to create thread!\n");
   }
 
+  // open stats.txt
+  FILE *statslogFD = fopen("stats.txt", "w");
+
   while (1) {
     pthread_cond_wait(&cond, &mutex);
     break;
@@ -106,6 +109,6 @@ int main(int argc, char **argv) {
     double cps = (double)cases / duration;
     printf("[%f] cps %f | reset %f | run %f | cases %lu\n", duration, cps, prst,
            prun, cases);
-    // printf("%f %f %f %lu\n", duration, prst, prun, cases);
+    fprintf(statslogFD,"%f %f %f %lu %f\n", duration, prst, prun, cases, cps);
   }
 }
