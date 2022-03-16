@@ -172,6 +172,9 @@ int updateStats(kernelGuest *guest) {
   guest->stats->cycles_run += local_stats.cycles_run;
   guest->stats->cases += local_stats.cases;
 
+  // Single sample
+  guest->stats->numOfPagesReset = local_stats.numOfPagesReset;
+
   pthread_mutex_unlock(guest->stats->lock);
 
   local_stats.cycles_reset = 0;
@@ -237,7 +240,7 @@ int runKernelVM(kernelGuest *guest) {
             break;
           case RESTORE_VM:
             start_reset = __rdtsc();
-            restoreSnapshot(guest);
+            local_stats.numOfPagesReset = restoreSnapshot(guest);
             local_stats.cycles_reset += __rdtsc() - start_reset;
             break;
           case ENABLE_DEBUG:

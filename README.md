@@ -2,13 +2,13 @@
 
 A Linux Kernel Snapshot Fuzzer using KVM.
 
-Late Registration is the name for a Linux Kernel snapshot fuzzer. The goal for this project is to be able to fuzz
-complex functionality of the Linux Kernel that would ordinarily require time consuming environment setup that would be
-difficult to reproduce solely using coverage based fuzzing techniques. To aid us in this project we will use the
+Tuscan Leather is a Linux Kernel snapshot fuzzer. The goal for this project is to be able to fuzz kernel systems that
+would ordinarily require time-consuming environment setup that would be difficult to reproduce solely using unsupervised
+coverage based fuzzing. To aid us in this project we will use the
 [Kernel Virtual Machine Platform](https://www.linux-kvm.org/page/Main_Page) (KVM) to create our virtual machines. The
 design of the fuzzer component of this project will be based on LibFuzzer where the developer has to define the fuzzing
-environment through the use of a C program acting as an initrd and an ioctl-based API provided by the OS Handler
-character device driver.
+environment through the use of a C program acting as an initrd and an ioctl-based API provided by the OS Handler device
+driver.
 
 ## Usage
 
@@ -34,5 +34,3 @@ by the KVM hypervisor. Available commands are in [fuzzRunner.h](os-handler/fuzzR
    1. Structure aware mutator for device driver ioctl fuzzing
 4. Multi-vm
    1. Ability to spin up multiple virtual machines to have concurrent kernel fuzzing
-   2. Requires architecture restructure to manage multiple VMs
-   3. Would use an IPC mechanism to orchestrate threads

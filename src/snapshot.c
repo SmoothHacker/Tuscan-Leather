@@ -19,6 +19,8 @@ int restoreSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vmfd, KVM_GET_DIRTY_LOG, &dirty_log) < 0)
     ERR("Failed to get Dirty Log");
 
+  int numOfPagesReset = 0;
+
   // Walk bitmap and queue dirty pages for restoration
   for (uint64_t QwordIdx = 0; QwordIdx < BITMAP_SIZE_QWORDS; QwordIdx++) {
     const uint64_t DirtyQword = guest->dirty_bitmap[QwordIdx];
@@ -35,6 +37,7 @@ int restoreSnapshot(kernelGuest *guest) {
       const uint64_t DirtyPageIdx = (QwordIdx * NUMBER_OF_BITS) + BitIdx;
       const uint64_t guestPhysAddr = DirtyPageIdx * PAGE_SIZE;
 
+      numOfPagesReset++;
       // memcpy to restore page
       void *guestVirtAddr = ((void *)guest->mem) + guestPhysAddr;
       void *snapshotVirtAddr = ((void *)snapshot->mem) + guestPhysAddr;
@@ -60,7 +63,7 @@ int restoreSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &snapshot->regs) < 0)
     ERR("Failed to set registers - restore");
 
-  return 0;
+  return numOfPagesReset;
 }
 
 /*

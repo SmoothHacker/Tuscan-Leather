@@ -56,6 +56,7 @@ int main(int argc, char **argv) {
   stats->cycles_run = 0;
   stats->cycles_vmexit = 0;
   stats->cases = 0;
+  stats->numOfPagesReset = 0;
 
   stats->lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
   pthread_mutex_init(stats->lock, NULL);
@@ -101,6 +102,7 @@ int main(int argc, char **argv) {
     uint64_t crst = stats->cycles_reset;
     uint64_t crun = stats->cycles_run;
     uint64_t cases = stats->cases;
+    uint64_t numReset = stats->numOfPagesReset;
     pthread_mutex_unlock(stats->lock);
 
     uint64_t ctot = crst + crun;
@@ -109,6 +111,7 @@ int main(int argc, char **argv) {
     double cps = (double)cases / duration;
     printf("[%f] cps %f | reset %f | run %f | cases %lu\n", duration, cps, prst,
            prun, cases);
-    fprintf(statslogFD,"%f %f %f %lu %f\n", duration, prst, prun, cases, cps);
+    fprintf(statslogFD, "%f %f %f %lu %f %lu\n", duration, prst, prun, cases,
+            cps, numReset);
   }
 }

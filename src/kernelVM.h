@@ -49,6 +49,7 @@ typedef struct {
   uint64_t cycles_reset;
   uint64_t cycles_vmexit;
   uint64_t cases;
+  uint64_t numOfPagesReset;
   pthread_mutex_t *lock;
 } statistics;
 
