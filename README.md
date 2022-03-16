@@ -12,7 +12,7 @@ driver.
 
 ## Usage
 
-`./Tuscan-Leather <Path to bzImage> <initrd>`
+`./Tuscan-Leather <Path to bzImage> <initrd> -j <jobs>`
 
 ## OS Handler
 

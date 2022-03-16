@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 
 #include "kernelVM.h"
 
@@ -14,6 +15,17 @@ struct worker_args {
   char *initrd_img_path;
   kernelGuest *guest;
 };
+
+uint64_t numberOfJobs = 0;
+pid_t *childPids;
+
+void kill_child(int sig) {
+  if (childPids == NULL)
+    return;
+  for (int i = 0; i < numberOfJobs; ++i) {
+    kill(childPids[i], SIGKILL);
+  }
+}
 
 void worker(struct worker_args *args) {
   args->guest->kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
@@ -39,19 +51,19 @@ void worker(struct worker_args *args) {
   runKernelVM(args->guest);
   cleanupKernelVM(args->guest);
   printf("[*] Destroyed Kernel VM - Success\n");
-  pthread_exit(0);
 }
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
-    fprintf(stderr, "Usage: ./Tuscan-Leather <bzImage> <initrd>\n");
+  if (argc != 5) {
+    fprintf(stderr, "Usage: ./Tuscan-Leather <bzImage> <initrd> -j <jobs>\n");
     return -1;
   }
 
   printf("Tuscan-Leather - Linux Kernel Fuzzer\n");
 
   // Initialize statistics Structure
-  statistics *stats = malloc(sizeof(statistics));
+  statistics *stats = mmap(NULL, sizeof(statistics), PROT_READ | PROT_WRITE,
+                           MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   stats->cycles_reset = 0;
   stats->cycles_run = 0;
   stats->cycles_vmexit = 0;
@@ -70,21 +82,25 @@ int main(int argc, char **argv) {
       .initrd_img_path = argv[2],
   };
 
-  pthread_t worker_thread_id;
+  numberOfJobs = strtoul(argv[4], NULL, 10);
+  childPids = malloc(numberOfJobs * sizeof(pid_t));
   pthread_mutex_lock(&mutex);
-  int ret =
-      pthread_create(&worker_thread_id, NULL, (void *(*)(void *))worker, &args);
-  if (ret) {
-    ERR("[!] Failed to create thread!\n");
+
+  // signal(SIGINT, (void (*)(int))kill_child);
+  for (int i = 0; i < numberOfJobs; i++) {
+    childPids[i] = fork();
+    if (childPids[i] == 0) {
+      worker(&args);
+      exit(0);
+    } else if (childPids[i] == -1) {
+      ERR("Fork Failed");
+    }
   }
 
   // open stats.txt
   FILE *statslogFD = fopen("stats.txt", "w");
 
-  while (1) {
-    pthread_cond_wait(&cond, &mutex);
-    break;
-  }
+  sleep(2);
 
   // Wait for snapshot to be created
   clock_t start = clock();
