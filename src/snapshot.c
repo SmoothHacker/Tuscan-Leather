@@ -1,12 +1,11 @@
 #include "snapshot.h"
 
-struct snapshot *snapshot;
-
 /*
  * restoreSnapshot
  * restores a prior saved snapshot of the vm to reset the kernel environment.
  * */
 int restoreSnapshot(kernelGuest *guest) {
+  struct snapshot *snapshot = guest->snapshot;
   if (ioctl(guest->vcpu_fd, KVM_KVMCLOCK_CTRL) < 0)
     ERR("Unable to set KVMCLOCK_CTRL");
 
@@ -74,8 +73,10 @@ int createSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_KVMCLOCK_CTRL) < 0)
     ERR("Unable to set KVMCLOCK_CTRL");
 
-  snapshot = malloc(sizeof(struct snapshot));
+  struct snapshot *snapshot = malloc(sizeof(struct snapshot));
   memset(snapshot, 0x0, sizeof(struct snapshot));
+
+  guest->snapshot = snapshot;
 
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &snapshot->sregs) < 0)
     ERR("Failed to get special registers");

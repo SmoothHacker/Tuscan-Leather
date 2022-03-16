@@ -15,8 +15,6 @@ struct snapshot {
   struct kvm_sregs sregs;
 };
 
-extern struct snapshot *snapshot;
-
 int restoreSnapshot(kernelGuest *guest);
 int createSnapshot(kernelGuest *guest);
 

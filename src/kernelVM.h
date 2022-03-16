@@ -62,6 +62,7 @@ typedef struct {
   void *kernelMemAddr;
   uint64_t *dirty_bitmap;
   statistics *stats;
+  struct snapshot *snapshot;
 } kernelGuest;
 
 int createKernelVM(kernelGuest *guest);

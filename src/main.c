@@ -10,6 +10,8 @@
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
+pthread_barrier_t init_barrier;
+
 struct worker_args {
   char *kernel_img_path;
   char *initrd_img_path;
@@ -40,12 +42,12 @@ void worker(struct worker_args *args) {
     errx(-1, "[!] KVM_GET_API_VERSION %d, expected 12", ret);
 
   createKernelVM(args->guest);
-  printf("[*] Created KernelVM\n");
+  // printf("[*] Created KernelVM\n");
 
   loadKernelVM(args->guest, args->kernel_img_path, args->initrd_img_path);
 
-  printf("[*] Loaded kernel image: %s\n", args->kernel_img_path);
-  printf("[*] Loaded initrd image: %s\n", args->initrd_img_path);
+  // printf("[*] Loaded kernel image: %s\n", args->kernel_img_path);
+  // printf("[*] Loaded initrd image: %s\n", args->initrd_img_path);
   printf("[*] Starting up VM\n");
 
   runKernelVM(args->guest);
@@ -86,6 +88,8 @@ int main(int argc, char **argv) {
   childPids = malloc(numberOfJobs * sizeof(pid_t));
   pthread_mutex_lock(&mutex);
 
+  // Need to make a single VM to create snapshot
+  // Get snapshot and fork to N processes.
   // signal(SIGINT, (void (*)(int))kill_child);
   for (int i = 0; i < numberOfJobs; i++) {
     childPids[i] = fork();
@@ -100,7 +104,10 @@ int main(int argc, char **argv) {
   // open stats.txt
   FILE *statslogFD = fopen("stats.txt", "w");
 
-  sleep(2);
+  while (1) {
+    if (stats->cases != 0)
+      break;
+  }
 
   // Wait for snapshot to be created
   clock_t start = clock();

@@ -233,10 +233,10 @@ int runKernelVM(kernelGuest *guest) {
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
-            printf("[*] Taking snapshot\n");
+            // printf("[*] Taking snapshot\n");
             createSnapshot(guest);
-            pthread_cond_signal(&cond);
-            // pthread_mutex_unlock(&mutex);
+            // pthread_cond_signal(&cond);
+            //  pthread_mutex_unlock(&mutex);
             break;
           case RESTORE_VM:
             start_reset = __rdtsc();
