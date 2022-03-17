@@ -205,7 +205,6 @@ int runKernelVM(kernelGuest *guest) {
     if (ret < 0) {
       err(1, "kvm_run failed");
     }
-    local_stats.cases += 1;
     local_stats.cycles_run += __rdtsc() - start_cyc_run;
 
     // Check if we can report stats to main thread
@@ -235,11 +234,10 @@ int runKernelVM(kernelGuest *guest) {
           case TAKE_SNAPSHOT:
             // printf("[*] Taking snapshot\n");
             createSnapshot(guest);
-            // pthread_cond_signal(&cond);
-            //  pthread_mutex_unlock(&mutex);
             break;
           case RESTORE_VM:
             start_reset = __rdtsc();
+            local_stats.cases += 1;
             local_stats.numOfPagesReset = restoreSnapshot(guest);
             local_stats.cycles_reset += __rdtsc() - start_reset;
             break;

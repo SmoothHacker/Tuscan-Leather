@@ -88,9 +88,7 @@ int main(int argc, char **argv) {
   childPids = malloc(numberOfJobs * sizeof(pid_t));
   pthread_mutex_lock(&mutex);
 
-  // Need to make a single VM to create snapshot
-  // Get snapshot and fork to N processes.
-  // signal(SIGINT, (void (*)(int))kill_child);
+  signal(SIGINT, (void (*)(int))kill_child);
   for (int i = 0; i < numberOfJobs; i++) {
     childPids[i] = fork();
     if (childPids[i] == 0) {
@@ -110,7 +108,8 @@ int main(int argc, char **argv) {
   }
 
   // Wait for snapshot to be created
-  clock_t start = clock();
+  struct timespec start, end;
+  clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
   while (1) {
     struct timespec ts = {
         .tv_sec = 0,
@@ -118,8 +117,8 @@ int main(int argc, char **argv) {
     };
     nanosleep(&ts, NULL);
 
-    clock_t elapsed = clock() - start;
-    double duration = ((double)elapsed) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+    double duration = (double)(end.tv_nsec - start.tv_nsec) / 1e6;
 
     pthread_mutex_lock(stats->lock);
     uint64_t crst = stats->cycles_reset;
