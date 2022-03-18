@@ -232,7 +232,6 @@ int runKernelVM(kernelGuest *guest) {
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
-            // printf("[*] Taking snapshot\n");
             createSnapshot(guest);
             break;
           case RESTORE_VM:

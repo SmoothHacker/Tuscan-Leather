@@ -41,8 +41,6 @@
 
 #define ERR(s) err(-1, "[!] " s)
 
-extern pthread_mutex_t mutex;
-extern pthread_cond_t cond;
 
 typedef struct {
   uint64_t cycles_run;

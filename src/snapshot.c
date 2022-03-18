@@ -108,7 +108,6 @@ int createSnapshot(kernelGuest *guest) {
     ERR("KVM_CLEAR_DIRTY_LOG");
   }
 
-  printf("[*] Snapshot Taken\n");
   return 0;
 }
 

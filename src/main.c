@@ -7,10 +7,6 @@
 
 #include "kernelVM.h"
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-
-pthread_barrier_t init_barrier;
 
 struct worker_args {
   char *kernel_img_path;
@@ -75,7 +71,8 @@ int main(int argc, char **argv) {
   stats->lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
   pthread_mutex_init(stats->lock, NULL);
 
-  kernelGuest *guest = malloc(sizeof(kernelGuest));
+  kernelGuest *guest = mmap(NULL, sizeof(kernelGuest), PROT_READ | PROT_WRITE,
+                            MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   guest->stats = stats;
 
   struct worker_args args = {
@@ -84,30 +81,30 @@ int main(int argc, char **argv) {
       .initrd_img_path = argv[2],
   };
 
+  signal(SIGINT, (void (*)(int))kill_child);
   numberOfJobs = strtoul(argv[4], NULL, 10);
   childPids = malloc(numberOfJobs * sizeof(pid_t));
-  pthread_mutex_lock(&mutex);
 
-  signal(SIGINT, (void (*)(int))kill_child);
   for (int i = 0; i < numberOfJobs; i++) {
-    childPids[i] = fork();
-    if (childPids[i] == 0) {
+    pid_t pid = fork();
+    if (pid == 0) {
       worker(&args);
       exit(0);
-    } else if (childPids[i] == -1) {
+    } else if (pid == -1) {
       ERR("Fork Failed");
     }
+    childPids[i] = pid;
   }
 
   // open stats.txt
   FILE *statslogFD = fopen("stats.txt", "w");
 
-  while (1) {
-    if (stats->cases != 0)
-      break;
-  }
-
   // Wait for snapshot to be created
+  while (1) {
+    if (stats->cases != 0) {
+      break;
+    }
+  }
   struct timespec start, end;
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
   while (1) {
