@@ -32,5 +32,3 @@ by the KVM hypervisor. Available commands are in [fuzzRunner.h](os-handler/fuzzR
    2. Desired breakpoints to be fed by a text file containing kernel addresses
 3. Mutator for Device Driver Fuzzing
    1. Structure aware mutator for device driver ioctl fuzzing
-4. Multi-vm
-   1. Ability to spin up multiple virtual machines to have concurrent kernel fuzzing
