@@ -2,6 +2,7 @@
 
 #include "../os-handler/fuzzRunner.h"
 #include "snapshot.h"
+#include "breakpoint.h"
 
 statistics local_stats;
 uint64_t last_report;
@@ -195,6 +196,8 @@ int runKernelVM(kernelGuest *guest) {
   local_stats.cases = 0;
   last_report = 0;
 
+  struct kvm_translation kvmTranslation = {.linear_address =
+                                               0xffffffff81673b60};
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
   struct kvm_run *run =
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
@@ -232,6 +235,10 @@ int runKernelVM(kernelGuest *guest) {
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
+            if (ioctl(guest->vcpu_fd, KVM_TRANSLATE, &kvmTranslation) < 0)
+              ERR("KVM_TRANSLATE Failed");
+            enableDebug(guest);
+            // addBreakpoint(guest, kvmTranslation.physical_address);
             createSnapshot(guest);
             break;
           case RESTORE_VM:
