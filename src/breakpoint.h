@@ -3,13 +3,13 @@
 
 #include "kernelVM.h"
 
-typedef struct {
-  uint64_t addr;
-  uint8_t code;
-} Breakpoint;
-
-extern uint64_t *breakpointAddrs;
-
+/*
+ * Breakpoint API
+ * Through this API, we are able to set software breakpoints on the vm. This
+ * will allow us to set breakpoints on important functions like `kasan_report`
+ * and have the vm kick out to userspace to handle it. From there we can reset
+ * the vm or save the testcase used to trip kasan.
+ * */
 int addBreakpoint(kernelGuest *guest, uint64_t addr);
 
 int delBreakpoint(kernelGuest *guest, uint64_t addr);

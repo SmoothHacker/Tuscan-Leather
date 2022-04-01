@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,9 +14,8 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <sys/uio.h>
-#include <pthread.h>
+#include <unistd.h>
 #include <x86intrin.h>
 
 #define MEM_SIZE 1 << 30
@@ -41,6 +41,8 @@
 
 #define ERR(s) err(-1, "[!] " s)
 
+// Have to modify everytime we re-compile the kernel
+#define KASAN_REPORT_COLD 0xffffffff83755621
 
 typedef struct {
   uint64_t cycles_run;

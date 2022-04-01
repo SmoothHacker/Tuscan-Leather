@@ -1,13 +1,15 @@
 #include "breakpoint.h"
 
-uint64_t *breakpointAddrs;
+int addBreakpoint(kernelGuest *guest, uint64_t virtAddr) {
+  struct kvm_translation kvmTranslation = {.linear_address = virtAddr};
+  if (ioctl(guest->vcpu_fd, KVM_TRANSLATE, &kvmTranslation) < 0)
+    ERR("KVM_TRANSLATE Failed");
 
-int addBreakpoint(kernelGuest *guest, uint64_t addr) {
-  *(uint8_t *)(guest->mem + addr) = 0xcc;
+  *(uint8_t *)(guest->mem + kvmTranslation.physical_address) = 0xcc;
   return 0;
-};
+}
 
-int delBreakpoint(kernelGuest *guest, uint64_t addr) { return 0; };
+int delBreakpoint(kernelGuest *guest, uint64_t addr) { return 0; }
 
 int loadAddresses(const char *filePath) {
   FILE *systemMapFD = fopen(filePath, "r");
@@ -28,4 +30,4 @@ int loadAddresses(const char *filePath) {
 
   fclose(systemMapFD);
   return 0;
-};
+}

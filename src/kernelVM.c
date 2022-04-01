@@ -1,8 +1,8 @@
 #include <string.h>
 
 #include "../os-handler/fuzzRunner.h"
-#include "snapshot.h"
 #include "breakpoint.h"
+#include "snapshot.h"
 
 statistics local_stats;
 uint64_t last_report;
@@ -196,8 +196,6 @@ int runKernelVM(kernelGuest *guest) {
   local_stats.cases = 0;
   last_report = 0;
 
-  struct kvm_translation kvmTranslation = {.linear_address =
-                                               0xffffffff81673b60};
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
   struct kvm_run *run =
       mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
@@ -235,10 +233,10 @@ int runKernelVM(kernelGuest *guest) {
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
-            if (ioctl(guest->vcpu_fd, KVM_TRANSLATE, &kvmTranslation) < 0)
-              ERR("KVM_TRANSLATE Failed");
             enableDebug(guest);
-            // addBreakpoint(guest, kvmTranslation.physical_address);
+
+            // Breakpoint on kasan reporting function
+            addBreakpoint(guest, KASAN_REPORT_COLD);
             createSnapshot(guest);
             break;
           case RESTORE_VM:
@@ -246,9 +244,6 @@ int runKernelVM(kernelGuest *guest) {
             local_stats.cases += 1;
             local_stats.numOfPagesReset = restoreSnapshot(guest);
             local_stats.cycles_reset += __rdtsc() - start_reset;
-            break;
-          case ENABLE_DEBUG:
-            enableDebug(guest);
             break;
           default:
             printf("[!] Unknown ioctl command: %d\n", *ioctl_cmd);
@@ -272,6 +267,7 @@ int runKernelVM(kernelGuest *guest) {
       return 0;
     case KVM_EXIT_DEBUG:
       printf("[!] Encountered Debug event\n");
+      printf("[!] KASAN tripped!\n[!] Dumping vcpu registers");
       dumpVCPURegs(guest);
       exit(-1);
     default:
