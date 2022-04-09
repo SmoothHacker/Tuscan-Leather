@@ -100,11 +100,9 @@ int main(int argc, char **argv) {
   FILE *statslogFD = fopen("stats.txt", "w");
 
   // Wait for snapshot to be created
-  while (1) {
-    if (stats->cases != 0) {
-      break;
-    }
-  }
+  printf("[*] Waiting for VM to update stats\n");
+  sleep(4); // old method caused infinite loops
+
   struct timespec start, end;
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
   while (1) {
