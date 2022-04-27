@@ -1,7 +1,8 @@
-#include <string.h>
+#include <cstring>
 
 #include "../os-handler/fuzzRunner.h"
 #include "breakpoint.h"
+#include "mutation.h"
 #include "snapshot.h"
 
 statistics local_stats;
@@ -34,7 +35,7 @@ int createKernelVM(kernelGuest *guest) {
   if (ioctl(guest->vmfd, KVM_CREATE_PIT2, &pit) < 0)
     ERR("Failed to create i8254 interval timer");
 
-  guest->mem = mmap(NULL, MEM_SIZE, PROT_READ | PROT_WRITE,
+  guest->mem = mmap(nullptr, MEM_SIZE, PROT_READ | PROT_WRITE,
                     MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
 
   if (!guest->mem)
@@ -57,7 +58,8 @@ int createKernelVM(kernelGuest *guest) {
     ERR("Failed to create vcpu");
 
   // Enabling dirty_log tracking
-  guest->dirty_bitmap = malloc(BITMAP_SIZE_BITS); // Tracking for 1GB vm memory
+  guest->dirty_bitmap = (uint64_t *)malloc(BITMAP_SIZE_BITS);
+  // Tracking for 1GB vm memory
 
   initVMRegs(guest);
   createCPUID(guest);
@@ -83,17 +85,17 @@ int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
     ERR("Cannot open kernel image and/or initrd");
   }
 
-  struct stat st;
+  struct stat st {};
   fstat(kernelFD, &st);
   size_t kernelFileSize = st.st_size;
-  void *kernelFile =
-      mmap(0, kernelFileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, kernelFD, 0);
+  void *kernelFile = mmap(nullptr, kernelFileSize, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE, kernelFD, 0);
   close(kernelFD);
 
   fstat(initrdFD, &st);
   size_t initrdFileSize = st.st_size;
-  void *initrdFile =
-      mmap(0, initrdFileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, initrdFD, 0);
+  void *initrdFile = mmap(nullptr, initrdFileSize, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE, initrdFD, 0);
   close(initrdFD);
 
   // Setup initrd
@@ -102,7 +104,7 @@ int loadKernelVM(kernelGuest *guest, const char *kernelImagePath,
   memmove(guest->initrdMemAddr, initrdFile, initrdFileSize);
 
   // Setup boot loader, cmdline, and kernel
-  struct boot_params *boot =
+  auto *boot =
       (struct boot_params *)(((uint8_t *)guest->mem) + BOOT_PARAM_ADDR);
   void *cmdline = (void *)(((uint8_t *)guest->mem) + CMDLINE_ADDR);
   guest->kernelMemAddr = (void *)(((uint8_t *)guest->mem) + KERNEL_ADDR);
@@ -172,6 +174,7 @@ int updateStats(kernelGuest *guest) {
   guest->stats->cycles_reset += local_stats.cycles_reset;
   guest->stats->cycles_run += local_stats.cycles_run;
   guest->stats->cases += local_stats.cases;
+  guest->stats->totalPCs = local_stats.totalPCs;
 
   // Single sample
   guest->stats->numOfPagesReset = local_stats.numOfPagesReset;
@@ -194,17 +197,19 @@ int runKernelVM(kernelGuest *guest) {
   local_stats.cycles_reset = 0;
   local_stats.cycles_run = 0;
   local_stats.cases = 0;
+  local_stats.totalPCs = 0;
   last_report = 0;
 
   int run_size = ioctl(guest->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
-  struct kvm_run *run =
-      mmap(0, run_size, PROT_READ | PROT_WRITE, MAP_SHARED, guest->vcpu_fd, 0);
+  auto *run = (struct kvm_run *)mmap(nullptr, run_size, PROT_READ | PROT_WRITE,
+                                     MAP_SHARED, guest->vcpu_fd, 0);
 
   for (;;) {
     uint64_t start_cyc_run = __rdtsc();
     int ret = ioctl(guest->vcpu_fd, KVM_RUN, 0);
     if (ret < 0) {
-      err(1, "kvm_run failed");
+      cleanupKernelVM(guest);
+      ERR("kvm_run failed");
     }
     local_stats.cycles_run += __rdtsc() - start_cyc_run;
 
@@ -229,7 +234,7 @@ int runKernelVM(kernelGuest *guest) {
       case 0xdead: // Port Reserved by os-handler kernel module
         if (run->io.direction == KVM_EXIT_IO_OUT) {
           uint8_t *ioctl_cmd = (uint8_t *)run + run->io.data_offset;
-          uint64_t start_reset = 0;
+          uint64_t start_reset;
 
           switch (*ioctl_cmd) {
           case TAKE_SNAPSHOT:
@@ -249,6 +254,16 @@ int runKernelVM(kernelGuest *guest) {
             printf("[!] Unknown ioctl command: %d\n", *ioctl_cmd);
             break;
           }
+        }
+        break;
+      case 0xbeef:
+        uint32_t *newPC;
+        if (run->io.direction != KVM_EXIT_IO_OUT)
+          break;
+        newPC = (uint32_t *)run + run->io.data_offset;
+        if (addPC(*newPC) == 1) {
+          printf("hello!\n");
+          local_stats.totalPCs += 1;
         }
         break;
       default:
@@ -283,8 +298,8 @@ int runKernelVM(kernelGuest *guest) {
  * Sourced from the Linux x86 boot protocol.
  * */
 int initVMRegs(kernelGuest *guest) {
-  struct kvm_regs regs;
-  struct kvm_sregs sregs;
+  struct kvm_regs regs {};
+  struct kvm_sregs sregs {};
   if (ioctl(guest->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
     ERR("Failed to get special registers");
 
@@ -323,9 +338,9 @@ int initVMRegs(kernelGuest *guest) {
     ERR("Failed to get registers");
 
   regs = (struct kvm_regs){
-      .rflags = 2,
-      .rip = KERNEL_ADDR,
       .rsi = BOOT_PARAM_ADDR,
+      .rip = KERNEL_ADDR,
+      .rflags = 2,
   };
 
   if (ioctl(guest->vcpu_fd, KVM_SET_REGS, &regs) < 0)
@@ -341,7 +356,8 @@ int initVMRegs(kernelGuest *guest) {
 int createCPUID(kernelGuest *guest) {
   struct kvm_cpuid2 *kvm_cpuid;
 
-  kvm_cpuid = calloc(1, sizeof(*kvm_cpuid) + 100 * sizeof(*kvm_cpuid->entries));
+  kvm_cpuid = (struct kvm_cpuid2 *)calloc(
+      1, sizeof(*kvm_cpuid) + 100 * sizeof(*kvm_cpuid->entries));
 
   kvm_cpuid->nent = 100;
   if (ioctl(guest->kvm_fd, KVM_GET_SUPPORTED_CPUID, kvm_cpuid) < 0)
@@ -387,7 +403,7 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
           unsigned int mask_length : 8;
         } split;
         unsigned int full;
-      } eax;
+      } eax{};
 
       /*
        * If the host has perf system running,
@@ -412,7 +428,7 @@ int filterCPUID(struct kvm_cpuid2 *cpuid) {
 }
 
 int dumpVCPURegs(kernelGuest *guest) {
-  struct kvm_regs regs;
+  struct kvm_regs regs {};
   if (ioctl(guest->vcpu_fd, KVM_GET_REGS, &regs) < 0)
     ERR("Failed to get registers - dumpVCPURegs");
 

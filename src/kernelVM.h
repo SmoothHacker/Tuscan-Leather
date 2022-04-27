@@ -50,6 +50,7 @@ typedef struct {
   uint64_t cycles_vmexit;
   uint64_t cases;
   uint64_t numOfPagesReset;
+  uint64_t totalPCs;
   pthread_mutex_t *lock;
 } statistics;
 
@@ -61,6 +62,7 @@ typedef struct {
   void *initrdMemAddr;
   void *kernelMemAddr;
   uint64_t *dirty_bitmap;
+  uint64_t pcs;
   statistics *stats;
   struct snapshot *snapshot;
 } kernelGuest;

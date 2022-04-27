@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(Tuscan-Leather C)
+project(Tuscan-Leather)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_COMPILER clang-12)
+set(CMAKE_CXX_COMPILER clang++-12)
 
-add_executable(Tuscan-Leather src/main.c src/kernelVM.c src/kernelVM.h src/snapshot.c src/snapshot.h src/breakpoint.c src/breakpoint.h)
+add_executable(Tuscan-Leather src/main.cpp src/kernelVM.cpp src/kernelVM.h src/snapshot.cpp src/snapshot.h src/breakpoint.cpp src/breakpoint.h src/mutation.cpp src/mutation.h)

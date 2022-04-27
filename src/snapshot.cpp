@@ -38,8 +38,8 @@ int restoreSnapshot(kernelGuest *guest) {
 
       numOfPagesReset++;
       // memcpy to restore page
-      void *guestVirtAddr = ((void *)guest->mem) + guestPhysAddr;
-      void *snapshotVirtAddr = ((void *)snapshot->mem) + guestPhysAddr;
+      void *guestVirtAddr = ((uint8_t *)guest->mem) + guestPhysAddr;
+      void *snapshotVirtAddr = ((uint8_t *)snapshot->mem) + guestPhysAddr;
 
       memcpy(guestVirtAddr, snapshotVirtAddr, PAGE_SIZE);
     }
@@ -73,7 +73,8 @@ int createSnapshot(kernelGuest *guest) {
   if (ioctl(guest->vcpu_fd, KVM_KVMCLOCK_CTRL) < 0)
     ERR("Unable to set KVMCLOCK_CTRL");
 
-  struct snapshot *snapshot = malloc(sizeof(struct snapshot));
+  struct snapshot *snapshot =
+      (struct snapshot *)malloc(sizeof(struct snapshot));
   memset(snapshot, 0x0, sizeof(struct snapshot));
 
   guest->snapshot = snapshot;
@@ -110,4 +111,3 @@ int createSnapshot(kernelGuest *guest) {
 
   return 0;
 }
-

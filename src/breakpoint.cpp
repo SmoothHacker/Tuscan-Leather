@@ -5,7 +5,7 @@ int addBreakpoint(kernelGuest *guest, uint64_t virtAddr) {
   if (ioctl(guest->vcpu_fd, KVM_TRANSLATE, &kvmTranslation) < 0)
     ERR("KVM_TRANSLATE Failed");
 
-  *(uint8_t *)(guest->mem + kvmTranslation.physical_address) = 0xcc;
+  *(uint8_t *)((uint8_t *)guest->mem + kvmTranslation.physical_address) = 0xcc;
   return 0;
 }
 
