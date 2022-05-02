@@ -2,15 +2,16 @@
 #define TUSCAN_LEATHER_KERNELVM_H
 
 #include <asm/bootparam.h>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <err.h>
 #include <fcntl.h>
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
 #include <pthread.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>

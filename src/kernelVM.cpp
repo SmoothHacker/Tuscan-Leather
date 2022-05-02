@@ -177,7 +177,7 @@ int updateStats(kernelGuest *guest) {
   guest->stats->totalPCs = local_stats.totalPCs;
 
   // Single sample
-  guest->stats->numOfPagesReset = local_stats.numOfPagesReset;
+  // guest->stats->numOfPagesReset = local_stats.numOfPagesReset;
 
   pthread_mutex_unlock(guest->stats->lock);
 

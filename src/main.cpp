@@ -111,26 +111,24 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
     double duration = (double)(end.tv_nsec - start.tv_nsec) / 1e6;
 
+    statistics localStats;
     pthread_mutex_lock(stats->lock);
-    uint64_t crst = stats->cycles_reset;
-    uint64_t crun = stats->cycles_run;
-    uint64_t cases = stats->cases;
-    uint64_t numReset = stats->numOfPagesReset;
-    uint64_t pcs = stats->totalPCs;
+    memcpy(&localStats, stats, sizeof(statistics));
     pthread_mutex_unlock(stats->lock);
 
-    uint64_t ctot = crst + crun;
-    double prst = (double)crst / (double)ctot;
-    double prun = (double)crun / (double)ctot;
-    double cps = (double)cases / duration;
+    uint64_t ctot = localStats.cycles_reset + localStats.cycles_run;
+    double prst = (double)localStats.cycles_reset / (double)ctot;
+    double prun = (double)localStats.cycles_run / (double)ctot;
+    double cps = (double)localStats.cases / duration;
 
     if (duration > 60.0f) {
       kill_child();
       return 0;
     }
     printf("[%f] cps %f | reset %f | run %f | cases %lu | cov %lu\n", duration,
-           cps, prst, prun, cases, pcs);
-    fprintf(statslogFD, "%f %f %f %lu %f %lu\n", duration, prst, prun, cases,
-            cps, numReset);
+           cps, prst, prun, localStats.cases, localStats.totalPCs);
+    // fprintf(statslogFD, "%f %f %f %lu %f %lu\n", duration, prst, prun,
+    //         localStats.cases,
+    //         cps, localStats.numOfPagesReset);
   }
 }
