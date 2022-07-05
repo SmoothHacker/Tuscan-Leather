@@ -1,8 +1,8 @@
+#include <csignal>
+#include <cstdio>
+#include <cstring>
 #include <linux/kvm.h>
 #include <pthread.h>
-#include <signal.h>
-#include <stdio.h>
-#include <string.h>
 #include <sys/ioctl.h>
 
 #include "kernelVM.h"
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
   // Initialize statistics Structure
   auto *stats =
-      (statistics *)mmap(NULL, sizeof(statistics), PROT_READ | PROT_WRITE,
+      (statistics *)mmap(nullptr, sizeof(statistics), PROT_READ | PROT_WRITE,
                          MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   stats->cycles_reset = 0;
   stats->cycles_run = 0;
@@ -64,10 +64,10 @@ int main(int argc, char **argv) {
   stats->numOfPagesReset = 0;
 
   stats->lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-  pthread_mutex_init(stats->lock, NULL);
+  pthread_mutex_init(stats->lock, nullptr);
 
   auto *guest =
-      (kernelGuest *)mmap(NULL, sizeof(kernelGuest), PROT_READ | PROT_WRITE,
+      (kernelGuest *)mmap(nullptr, sizeof(kernelGuest), PROT_READ | PROT_WRITE,
                           MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   guest->stats = stats;
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
   };
 
   signal(SIGINT, (void (*)(int))kill_child);
-  numberOfJobs = strtoul(argv[4], NULL, 10);
+  numberOfJobs = strtoul(argv[4], nullptr, 10);
   childPids = (pid_t *)malloc(numberOfJobs * sizeof(pid_t));
 
   for (int i = 0; i < numberOfJobs; i++) {
@@ -99,14 +99,15 @@ int main(int argc, char **argv) {
   printf("[*] Waiting for VM to update stats\n");
   sleep(5);
 
-  struct timespec start, end;
+  struct timespec start {
+  }, end{};
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
-  while (1) {
+  while (true) {
     struct timespec ts = {
         .tv_sec = 0,
         .tv_nsec = 100000000,
     };
-    nanosleep(&ts, NULL);
+    nanosleep(&ts, nullptr);
 
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
     double duration = (double)(end.tv_nsec - start.tv_nsec) / 1e6;
