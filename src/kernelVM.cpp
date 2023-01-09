@@ -17,7 +17,7 @@ int createKernelVM(kernelGuest *guest) {
     ERR("KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 is not supported");
 
   struct kvm_enable_cap cap = {.cap = KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2,
-                               .args = KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE};
+                               .args = {KVM_DIRTY_LOG_MANUAL_PROTECT_ENABLE}};
   if (ioctl(guest->vmfd, KVM_ENABLE_CAP, &cap) < 0)
     ERR("Enable cap KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2 failed");
 
