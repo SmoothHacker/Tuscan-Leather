@@ -219,6 +219,7 @@ int runKernelVM(kernelGuest *guest) {
       updateStats(guest);
     }
 
+    printf("[*] Exit Reason: %d\n", run->exit_reason);
     switch (run->exit_reason) {
     case KVM_EXIT_IO: // TODO: Add system for ttys to be sent to stdout.
       switch (run->io.port) {
@@ -279,6 +280,7 @@ int runKernelVM(kernelGuest *guest) {
           run->fail_entry.hardware_entry_failure_reason);
     case KVM_EXIT_SHUTDOWN:
       printf("[!] Shutdown Received\n");
+      dumpVCPURegs(guest);
       return 0;
     case KVM_EXIT_DEBUG:
       printf("[!] Encountered Debug event\n");

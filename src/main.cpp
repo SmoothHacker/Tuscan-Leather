@@ -22,6 +22,7 @@ void kill_child() {
   for (int i = 0; i < numberOfJobs; ++i) {
     kill(childPids[i], SIGKILL);
   }
+  exit(0);
 }
 
 void worker(struct worker_args *args) {
@@ -54,9 +55,7 @@ int main(int argc, char **argv) {
   printf("Tuscan-Leather - Linux Kernel Fuzzer\n");
 
   // Initialize statistics Structure
-  auto *stats =
-      (statistics *)mmap(nullptr, sizeof(statistics), PROT_READ | PROT_WRITE,
-                         MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  statistics *stats = (statistics *)mmap(nullptr, sizeof(statistics), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   stats->cycles_reset = 0;
   stats->cycles_run = 0;
   stats->cycles_vmexit = 0;
@@ -66,9 +65,7 @@ int main(int argc, char **argv) {
   stats->lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
   pthread_mutex_init(stats->lock, nullptr);
 
-  auto *guest =
-      (kernelGuest *)mmap(nullptr, sizeof(kernelGuest), PROT_READ | PROT_WRITE,
-                          MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  kernelGuest *guest = (kernelGuest *)mmap(nullptr, sizeof(kernelGuest), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   guest->stats = stats;
 
   struct worker_args args = {
@@ -128,8 +125,5 @@ int main(int argc, char **argv) {
     }
     printf("[%f] cps %f | reset %f | run %f | cases %lu | cov %lu\n", duration,
            cps, prst, prun, localStats.cases, localStats.totalPCs);
-    // fprintf(statslogFD, "%f %f %f %lu %f %lu\n", duration, prst, prun,
-    //         localStats.cases,
-    //         cps, localStats.numOfPagesReset);
   }
 }
